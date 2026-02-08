@@ -31,7 +31,6 @@ from email_digest import render_email_html, send_email  # noqa: E402
 from scrape import (  # noqa: E402
     LOCATIONS,
     ROLE_SEARCHES,
-    SKILL_TIERS,
     classify_company,
     deduplicate,
     detect_seniority,
@@ -91,6 +90,8 @@ class ScoringWeights(BaseModel):
     skills: float = 1.0
     sponsorship: float = 1.0
     recency: float = 1.0
+    culture: float = 1.0
+    quality: float = 1.0
 
 
 class ScrapeRequest(BaseModel):
@@ -130,30 +131,24 @@ TIER_WEIGHTS = {
 }
 
 
-def convert_profile(profile: Profile) -> dict:
+def convert_profile(profile: Profile) -> tuple[dict, dict]:
     """Convert the AI-parsed profile into the format expected by score_job().
 
-    - profile.skills becomes a set of skill name strings (for skill matching)
-    - profile.keywords stays as a set of strings
-    - profile.titles stays as a list of strings
-    - Dynamically builds SKILL_TIERS dict from the AI profile's tier field
+    Returns:
+        (profile_dict, skill_tiers_dict) — profile_dict has skills/titles/keywords,
+        skill_tiers_dict maps lowercase skill names to point values (5/3/1).
     """
-    # Build skill names set for score_job()'s profile["skills"]
     skill_names: set[str] = set()
+    skill_tiers: dict[str, int] = {}
     for skill in profile.skills:
         skill_names.add(skill.name)
-
-    # Dynamically override SKILL_TIERS with the AI-parsed tier weights
-    # This patches the module-level dict so score_job() picks up the new weights
-    for skill in profile.skills:
-        weight = TIER_WEIGHTS.get(skill.tier, 1)
-        SKILL_TIERS[skill.name.lower()] = weight
+        skill_tiers[skill.name.lower()] = TIER_WEIGHTS.get(skill.tier, 1)
 
     return {
         "skills": skill_names,
         "titles": profile.titles,
         "keywords": set(profile.keywords),
-    }
+    }, skill_tiers
 
 
 def resolve_locations(preference_locations: list[str]) -> list[str]:
@@ -165,6 +160,12 @@ def resolve_locations(preference_locations: list[str]) -> list[str]:
         "adelaide": "Adelaide, Australia",
         "sydney": "Sydney, Australia",
         "melbourne": "Melbourne, Australia",
+        "brisbane": "Brisbane, Australia",
+        "perth": "Perth, Australia",
+        "canberra": "Canberra, Australia",
+        "gold coast": "Gold Coast, Australia",
+        "hobart": "Hobart, Australia",
+        "remote": "Australia",
     }
 
     resolved = []
@@ -179,6 +180,52 @@ def resolve_locations(preference_locations: list[str]) -> list[str]:
     return resolved if resolved else LOCATIONS
 
 
+def _build_title_prefs(titles: list[str]) -> list[dict]:
+    """Build dynamic title preferences from the user's resume titles.
+
+    Maps resume titles to search-friendly terms with point values:
+    - Exact title from resume: 18 points
+    - Generalized form (strip junior/senior prefix): 14 points
+    - Always include broad catch-alls: 10 points
+    """
+    title_prefs: list[dict] = []
+    seen_terms: set[str] = set()
+
+    # Prefixes to strip for generalized forms
+    strip_prefixes = [
+        "junior ", "senior ", "lead ", "staff ", "principal ",
+        "intern ", "graduate ", "mid-level ", "entry-level ",
+    ]
+
+    for t in titles:
+        term = t.lower().strip()
+        if term and term not in seen_terms:
+            title_prefs.append({"term": term, "points": 18})
+            seen_terms.add(term)
+
+        # Generalized form: strip seniority prefix
+        generalized = term
+        for prefix in strip_prefixes:
+            if generalized.startswith(prefix):
+                generalized = generalized[len(prefix):]
+                break
+        if generalized and generalized != term and generalized not in seen_terms:
+            title_prefs.append({"term": generalized, "points": 14})
+            seen_terms.add(generalized)
+
+    # Always add broad catch-all terms
+    broad_terms = [
+        ("software engineer", 10), ("software developer", 10),
+        ("developer", 8), ("engineer", 8),
+    ]
+    for term, pts in broad_terms:
+        if term not in seen_terms:
+            title_prefs.append({"term": term, "points": pts})
+            seen_terms.add(term)
+
+    return title_prefs
+
+
 # ── Background Task ──────────────────────────────────────────────────────────
 
 def run_scrape_job(request: ScrapeRequest):
@@ -188,7 +235,7 @@ def run_scrape_job(request: ScrapeRequest):
 
     try:
         # 1. Convert AI-parsed profile to score_job() format
-        profile = convert_profile(request.profile)
+        profile, user_skill_tiers = convert_profile(request.profile)
         logger.info(
             f"[{submission_id}] Profile: "
             f"{len(profile['skills'])} skills, "
@@ -223,7 +270,7 @@ def run_scrape_job(request: ScrapeRequest):
 
         # 3b. Filter to AU target cities
         if "location" in jobs.columns:
-            target_cities = {"adelaide", "sydney", "melbourne", "remote", "australia"}
+            target_cities = {"adelaide", "sydney", "melbourne", "brisbane", "perth", "canberra", "gold coast", "hobart", "remote", "australia"}
             loc_lower = jobs["location"].fillna("").str.lower()
             au_mask = loc_lower.apply(lambda loc: any(c in loc for c in target_cities))
             before_filter = len(jobs)
@@ -237,12 +284,33 @@ def run_scrape_job(request: ScrapeRequest):
         jobs["tier"] = jobs["company"].apply(classify_company) if "company" in jobs.columns else ""
         jobs["seniority"] = jobs["title"].apply(detect_seniority) if "title" in jobs.columns else ""
         jobs["seniority"] = jobs["seniority"].replace("", "mid")
-        # Convert scoring weights to dict for score_job()
+        # Build dynamic scoring params from user profile + preferences
         weights_dict = None
         if request.scoringWeights:
             weights_dict = request.scoringWeights.model_dump()
 
-        jobs["score"] = jobs.apply(lambda row: score_job(row, profile, weights_dict), axis=1)
+        # Dynamic location preferences (first selected = 15pts, rest = 12pts)
+        location_prefs = None
+        if request.preferences.locations:
+            location_prefs = []
+            for i, loc in enumerate(request.preferences.locations):
+                location_prefs.append({
+                    "city": loc.lower().strip(),
+                    "points": 15 if i == 0 else 12,
+                })
+
+        # Dynamic title preferences from user's resume titles
+        title_prefs = _build_title_prefs(request.profile.titles)
+
+        jobs["score"] = jobs.apply(
+            lambda row: score_job(
+                row, profile, weights_dict,
+                skill_tiers=user_skill_tiers,
+                location_prefs=location_prefs,
+                title_prefs=title_prefs,
+            ),
+            axis=1,
+        )
         jobs = jobs.sort_values("score", ascending=False).reset_index(drop=True)
 
         # 5. Render and send email digest

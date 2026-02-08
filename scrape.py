@@ -210,16 +210,74 @@ SPONSORSHIP_SIGNALS = [
     "relocation support", "relocation assistance",
 ]
 
+# ─── Skill Synonym Mapping (adjacency bonus for related tech) ────────────────
+SKILL_SYNONYMS = {
+    "react": ["vue", "angular", "svelte"],
+    "vue": ["react", "angular", "svelte"],
+    "angular": ["react", "vue", "svelte"],
+    "typescript": ["javascript"],
+    "javascript": ["typescript"],
+    "next.js": ["nuxt", "remix", "gatsby"],
+    "django": ["flask", "fastapi"],
+    "flask": ["django", "fastapi"],
+    "fastapi": ["django", "flask"],
+    ".net": ["java", "spring"],
+    "java": [".net", "spring", "kotlin"],
+    "postgresql": ["mysql", "mongodb", "sqlite"],
+    "mysql": ["postgresql", "mongodb"],
+    "mongodb": ["postgresql", "mysql"],
+    "docker": ["kubernetes", "podman"],
+    "kubernetes": ["docker"],
+    "aws": ["gcp", "azure"],
+    "gcp": ["aws", "azure"],
+    "azure": ["aws", "gcp"],
+    "python": ["ruby", "go", "rust"],
+    "ruby": ["python"],
+    "go": ["python", "rust"],
+    "rust": ["go", "python"],
+    "tailwind": ["bootstrap", "chakra ui"],
+    "node.js": ["deno", "bun"],
+    "express": ["koa", "fastify", "hapi"],
+    "redis": ["memcached"],
+    "graphql": ["rest api", "trpc"],
+}
+
+# ─── Culture Signals (bonus only, never penalize for absence) ────────────────
+CULTURE_SIGNALS = {
+    "remote-first": 4, "fully remote": 4, "remote friendly": 3,
+    "flexible hours": 3, "flexible work": 3, "work from home": 3,
+    "hybrid work": 2,
+    "equity": 3, "stock options": 3, "esop": 3,
+    "learning budget": 2, "professional development": 2, "conference budget": 2,
+    "mental health": 2, "wellness program": 2,
+    "4 day work week": 4, "four day work week": 4,
+    "parental leave": 2, "generous leave": 2,
+    "diversity": 1, "inclusive": 1,
+}
+
 
 # ─── Job Scoring ─────────────────────────────────────────────────────────────
 
-def score_job(row: pd.Series, profile: dict, weights: dict = None) -> float:
+def score_job(
+    row: pd.Series,
+    profile: dict,
+    weights: dict = None,
+    skill_tiers: dict = None,
+    location_prefs: list = None,
+    title_prefs: list = None,
+) -> float:
     """Score a job by relevance to the parsed resume profile.
 
     Args:
         weights: Optional dict with multipliers for scoring categories.
-            Keys: companyTier, location, titleMatch, skills, sponsorship, recency
+            Keys: companyTier, location, titleMatch, skills, sponsorship, recency, culture, quality
             Values: 0.0 to 2.0 (default 1.0 for all)
+        skill_tiers: Optional dict mapping skill names (lowercase) to point values.
+            Falls back to module-level SKILL_TIERS for CLI mode.
+        location_prefs: Optional list of {"city": str, "points": int} dicts.
+            Falls back to hardcoded Adelaide/Sydney/Melbourne for CLI mode.
+        title_prefs: Optional list of {"term": str, "points": int} dicts.
+            Falls back to hardcoded title_boosts for CLI mode.
     """
     w = weights or {}
     w_company = w.get("companyTier", 1.0)
@@ -228,6 +286,10 @@ def score_job(row: pd.Series, profile: dict, weights: dict = None) -> float:
     w_skills = w.get("skills", 1.0)
     w_sponsorship = w.get("sponsorship", 1.0)
     w_recency = w.get("recency", 1.0)
+    w_culture = w.get("culture", 1.0)
+    w_quality = w.get("quality", 1.0)
+
+    tiers = skill_tiers or SKILL_TIERS  # fallback for CLI
 
     score = 0.0
     title = str(row.get("title", "")).lower()
@@ -253,98 +315,112 @@ def score_job(row: pd.Series, profile: dict, weights: dict = None) -> float:
                 break
     score += tier_score * w_company
 
-    # ── Location scoring ──
+    # ── Location scoring (dynamic from user preferences) ──
     location_score = 0
-    if "adelaide" in location:
-        location_score += 15
-    elif "sydney" in location:
-        location_score += 12
-    elif "melbourne" in location:
-        location_score += 12
+    if location_prefs:
+        for pref in location_prefs:
+            if pref["city"].lower() in location:
+                location_score = max(location_score, pref.get("points", 12))
+    else:
+        # CLI fallback: original hardcoded values
+        if "adelaide" in location:
+            location_score = 15
+        elif "sydney" in location:
+            location_score = 12
+        elif "melbourne" in location:
+            location_score = 12
     if "remote" in location:
         location_score += 5
     score += location_score * w_location
 
-    # ── Title scoring (BUG FIX 1: take max single match, not sum) ──
-    title_boosts = {
-        # Graduate roles (FIX 8: highest tier — he's a current student)
-        "graduate developer": 18, "graduate engineer": 18,
-        "graduate software": 18, "grad developer": 18,
-        "new grad": 18,
-        # Core full-stack (strongest match)
-        "full stack": 18, "fullstack": 18, "full-stack": 18,
-        # Frontend
-        "frontend": 15, "front-end": 15, "front end": 15,
-        # SWE variations
-        "software engineer": 14, "software developer": 14,
-        "forward deployed": 14,
-        "ai engineer": 14, "ai developer": 14,
-        # Mid-tier
-        "application developer": 12, "applications developer": 12,
-        "ai platform": 12, "ai infrastructure": 12,
-        # Broad SWE
-        "backend": 10, "back-end": 10, "back end": 10,
-        "web developer": 10, "web engineer": 10,
-        "platform engineer": 10, "infrastructure engineer": 10,
-        "devops engineer": 10, "devops": 10,
-        "site reliability": 10, "sre": 10,
-        "cloud engineer": 10, "systems engineer": 10,
-        "solutions engineer": 10,
-        "ml engineer": 10, "machine learning engineer": 10, "mlops": 10,
-        # Niche SWE
-        "integration engineer": 8, "automation engineer": 8,
-        "release engineer": 8, "build engineer": 8,
-        # QA/Test
-        "test engineer": 6, "qa engineer": 6, "sdet": 6,
-    }
-    best_title_boost = 0
-    for term, boost in title_boosts.items():
-        if term in title:
-            best_title_boost = max(best_title_boost, boost)
-    score += best_title_boost * w_title
+    # ── Title scoring (dynamic from user's resume titles) ──
+    if title_prefs:
+        best_title_boost = 0
+        for pref in title_prefs:
+            if pref["term"].lower() in title:
+                best_title_boost = max(best_title_boost, pref.get("points", 14))
+        score += best_title_boost * w_title
+    else:
+        # CLI fallback: original hardcoded title_boosts
+        title_boosts = {
+            "graduate developer": 18, "graduate engineer": 18,
+            "graduate software": 18, "grad developer": 18, "new grad": 18,
+            "full stack": 18, "fullstack": 18, "full-stack": 18,
+            "frontend": 15, "front-end": 15, "front end": 15,
+            "software engineer": 14, "software developer": 14,
+            "forward deployed": 14, "ai engineer": 14, "ai developer": 14,
+            "application developer": 12, "applications developer": 12,
+            "ai platform": 12, "ai infrastructure": 12,
+            "backend": 10, "back-end": 10, "back end": 10,
+            "web developer": 10, "web engineer": 10,
+            "platform engineer": 10, "infrastructure engineer": 10,
+            "devops engineer": 10, "devops": 10,
+            "site reliability": 10, "sre": 10,
+            "cloud engineer": 10, "systems engineer": 10,
+            "solutions engineer": 10,
+            "ml engineer": 10, "machine learning engineer": 10, "mlops": 10,
+            "integration engineer": 8, "automation engineer": 8,
+            "release engineer": 8, "build engineer": 8,
+            "test engineer": 6, "qa engineer": 6, "sdet": 6,
+        }
+        best_title_boost = 0
+        for term, boost in title_boosts.items():
+            if term in title:
+                best_title_boost = max(best_title_boost, boost)
+        score += best_title_boost * w_title
 
-    # ── FIX 6: Negative title penalty (non-engineering roles) ──
+    # ── Negative title penalty (non-engineering roles, NEVER weighted) ──
     if any(pat in title for pat in NEGATIVE_TITLE_PATTERNS):
         score -= 20
 
-    # ── Skill match scoring (FIX 4: tiered weights + BUG FIX 3: track for dedup) ──
+    # ── Skill match scoring (uses dynamic tiers from user profile) ──
     matched_skill_terms = set()
     skill_score = 0.0
     for skill in profile.get("skills", []):
         skill_lower = skill.lower()
         if skill_lower in description or skill_lower in title:
-            tier_pts = SKILL_TIERS.get(skill_lower, 1)
+            tier_pts = tiers.get(skill_lower, 1)
             skill_score += tier_pts
             matched_skill_terms.add(skill_lower)
     score += min(skill_score, 30) * w_skills
 
-    # ── Keyword match scoring (BUG FIX 2: word-boundary + BUG FIX 3: dedup) ──
+    # ── Skill adjacency bonus (+2 per related tech, cap 10) ──
+    adjacency_score = 0.0
+    for skill in profile.get("skills", []):
+        synonyms = SKILL_SYNONYMS.get(skill.lower(), [])
+        for syn in synonyms:
+            if syn not in matched_skill_terms and (syn in description or syn in title):
+                adjacency_score += 2
+                matched_skill_terms.add(syn)
+    score += min(adjacency_score, 10) * w_skills
+
+    # ── Keyword match scoring (word-boundary + dedup) ──
     keyword_score = 0.0
     for kw in profile.get("keywords", []):
         if kw in matched_skill_terms:
-            continue  # Already counted in skill scoring
+            continue
         if re.search(r'\b' + re.escape(kw) + r'\b', description):
             keyword_score += 2
     score += min(keyword_score, 15) * w_skills
 
-    # ── Seniority scoring (FIX 7: lead -10 → -5) ──
+    # ── Seniority scoring (NEVER weighted) ──
     seniority = str(row.get("seniority", "")) or detect_seniority(str(row.get("title", "")))
     seniority_scores = {
         "executive": -40, "director": -35, "staff": -25,
         "senior": -5, "lead": -5,
         "intern": -10,
-        "junior": 0,    # neutral — some grad roles are fine
+        "junior": 0,
     }
     score += seniority_scores.get(seniority, 0)
 
-    # ── Visa/sponsorship signals (important for international students, +12 cap) ──
+    # ── Visa/sponsorship signals (+12 cap) ──
     sponsorship_score = 0
     for signal in SPONSORSHIP_SIGNALS:
         if signal in description:
             sponsorship_score += 4
     score += min(sponsorship_score, 12) * w_sponsorship
 
-    # ── AI-adjacent vs pure ML/research penalty ──
+    # ── AI-adjacent vs pure ML/research penalty (NEVER weighted) ──
     pure_research_titles = [
         "data scientist", "research scientist", "ml researcher",
         "machine learning researcher", "nlp researcher", "cv researcher",
@@ -355,9 +431,28 @@ def score_job(row: pd.Series, profile: dict, weights: dict = None) -> float:
     ai_infra_signals = ["platform", "infrastructure", "infra", "ops", "deploy", "serving", "pipeline", "production"]
     if any(s in title or s in description[:200] for s in ai_infra_signals):
         if any(kw in title for kw in pure_research_titles):
-            score += 10  # partial recovery — it's research but with infra focus
+            score += 10
 
-    # ── Recency boost (newer = fewer applicants = better chance) ──
+    # ── Culture signals (bonus only, NEVER penalize for absence) ──
+    culture_score = 0
+    for signal, pts in CULTURE_SIGNALS.items():
+        if signal in description:
+            culture_score += pts
+    score += min(culture_score, 15) * w_culture
+
+    # ── Job quality signals (salary transparency, JD quality) ──
+    quality_score = 0
+    salary = str(row.get("salary", ""))
+    if salary and salary != "nan" and len(salary) > 3:
+        quality_score += 5
+    if len(description) > 500:
+        quality_score += 3
+    benefits_signals = ["benefits", "perks", "what we offer", "why join"]
+    if any(sig in description for sig in benefits_signals):
+        quality_score += 4
+    score += min(quality_score, 12) * w_quality
+
+    # ── Recency boost ──
     date_str = str(row.get("date_posted", ""))
     recency_boost = _recency_score(date_str)
     score += recency_boost * w_recency

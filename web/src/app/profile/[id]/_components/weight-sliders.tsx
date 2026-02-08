@@ -7,6 +7,8 @@ interface ScoringWeights {
   skills: number;
   sponsorship: number;
   recency: number;
+  culture: number;
+  quality: number;
 }
 
 interface WeightSlidersProps {
@@ -48,6 +50,16 @@ const WEIGHT_LABELS: Record<
     desc: "Newer postings score higher",
     icon: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm1 3H11v6l5.25 3.15.75-1.23-4.5-2.67V7Z",
   },
+  culture: {
+    label: "Culture Signals",
+    desc: "Remote-first, equity, flexible hours, learning budget",
+    icon: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35Z",
+  },
+  quality: {
+    label: "Job Quality",
+    desc: "Salary transparency, detailed descriptions, benefits listed",
+    icon: "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 0 0 1.946-.806 3.42 3.42 0 0 1 4.438 0 3.42 3.42 0 0 0 1.946.806 3.42 3.42 0 0 1 3.138 3.138 3.42 3.42 0 0 0 .806 1.946 3.42 3.42 0 0 1 0 4.438 3.42 3.42 0 0 0-.806 1.946 3.42 3.42 0 0 1-3.138 3.138 3.42 3.42 0 0 0-1.946.806 3.42 3.42 0 0 1-4.438 0 3.42 3.42 0 0 0-1.946-.806 3.42 3.42 0 0 1-3.138-3.138 3.42 3.42 0 0 0-.806-1.946 3.42 3.42 0 0 1 0-4.438 3.42 3.42 0 0 0 .806-1.946 3.42 3.42 0 0 1 3.138-3.138Z",
+  },
 };
 
 function getSliderBackground(value: number): string {
@@ -71,6 +83,8 @@ export function WeightSliders({
       skills: 1,
       sponsorship: 1,
       recency: 1,
+      culture: 1,
+      quality: 1,
     });
   };
 

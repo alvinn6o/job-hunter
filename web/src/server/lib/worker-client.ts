@@ -7,6 +7,8 @@ interface ScoringWeights {
   skills: number;
   sponsorship: number;
   recency: number;
+  culture: number;
+  quality: number;
 }
 
 interface WorkerPayload {
