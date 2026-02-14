@@ -59,12 +59,18 @@ jobs:
 
       - name: Run scraper (focused)
         if: ${{ !(inputs.full_run == true || inputs.full_run == 'true') }}
+        env:
+          CHROME_BINARY: /usr/bin/google-chrome-stable
+          PYTHONUNBUFFERED: "1"
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             uv run python scrape.py --profile profile.json --hours "${{ inputs.hours || '24' }}" --results 20
 
       - name: Run scraper (full)
         if: ${{ inputs.full_run == true || inputs.full_run == 'true' }}
+        env:
+          CHROME_BINARY: /usr/bin/google-chrome-stable
+          PYTHONUNBUFFERED: "1"
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             uv run python scrape.py --profile profile.json --hours 48
