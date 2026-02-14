@@ -1,0 +1,28 @@
+{
+  "skills": [
+    {"name": "React", "tier": "core"},
+    {"name": "TypeScript", "tier": "core"},
+    {"name": "Next.js", "tier": "core"},
+    {"name": "Python", "tier": "strong"},
+    {"name": "Django", "tier": "strong"},
+    {"name": "Node.js", "tier": "strong"},
+    {"name": "PostgreSQL", "tier": "strong"},
+    {"name": "Docker", "tier": "peripheral"},
+    {"name": "AWS", "tier": "peripheral"},
+    {"name": "Redis", "tier": "peripheral"}
+  ],
+  "titles": ["Full Stack Developer", "Frontend Engineer"],
+  "keywords": ["typescript", "react", "nextjs", "python", "django", "node.js", "postgresql", "docker", "aws"],
+  "locations": ["Adelaide", "Sydney", "Melbourne"],
+  "roles": ["Graduate Developer", "Full Stack Developer", "Frontend Developer", "Software Engineer"],
+  "weights": {
+    "skills": 1.0,
+    "companyTier": 1.0,
+    "location": 1.0,
+    "titleMatch": 1.0,
+    "sponsorship": 1.0,
+    "recency": 1.0,
+    "culture": 1.0,
+    "quality": 1.0
+  }
+}

@@ -1,25 +1,24 @@
 """
-Job Hunter - Scrape Australian jobs matched to your LaTeX resume.
+Job Hunter - Scrape Australian jobs matched to your profile JSON.
 
-Parses resume .tex files to extract skills/keywords, scrapes 5 job boards
-across Adelaide/Sydney/Melbourne, then ranks results by company tier and
-role fit.
+Loads a JSON profile with skills/keywords, scrapes 5 job boards across
+Australia, then ranks results by company tier and role fit.
 
 Usage:
-    uv run python scrape.py                     # Full run: all locations + roles
-    uv run python scrape.py --hours 24          # Last 24 hours only
-    uv run python scrape.py --big-tech          # Big tech filter only
-    uv run python scrape.py --location Sydney   # Single location
-    uv run python scrape.py --search "DevOps"   # Custom search override
-    uv run python scrape.py --resume-dir ./resumes  # Custom resume path
+    uv run python scrape.py                          # Uses profile.json in current dir
+    uv run python scrape.py --profile my-profile.json  # Custom profile
+    uv run python scrape.py --hours 24               # Last 24 hours only
+    uv run python scrape.py --location Sydney         # Single location
+    uv run python scrape.py --search "DevOps"         # Custom search override
 """
 
 import argparse
 import csv
+import json
 import logging
 import re
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -39,34 +38,120 @@ SITES = ["indeed"]
 
 # ── Company tiers ────────────────────────────────────────────────────────────
 TIER_BIG_TECH = {
-    "Google", "Meta", "Apple", "Amazon", "Microsoft", "Netflix",
-    "Atlassian", "Canva", "Stripe", "Airbnb", "Uber", "Spotify",
-    "Salesforce", "Adobe", "Oracle", "SAP", "IBM", "Intel", "Cisco",
-    "Nvidia", "AMD", "Qualcomm", "Samsung", "Sony",
+    "Google",
+    "Meta",
+    "Apple",
+    "Amazon",
+    "Microsoft",
+    "Netflix",
+    "Atlassian",
+    "Canva",
+    "Stripe",
+    "Airbnb",
+    "Uber",
+    "Spotify",
+    "Salesforce",
+    "Adobe",
+    "Oracle",
+    "SAP",
+    "IBM",
+    "Intel",
+    "Cisco",
+    "Nvidia",
+    "AMD",
+    "Qualcomm",
+    "Samsung",
+    "Sony",
 }
 
 TIER_TOP_TECH = {
-    "Shopify", "Cloudflare", "Vercel", "Supabase", "MongoDB",
-    "Datadog", "Figma", "Notion", "Linear", "Anthropic", "OpenAI",
-    "Coinbase", "Block", "Palantir", "Snowflake", "Databricks",
-    "Twilio", "Okta", "HashiCorp", "Elastic", "Confluent",
-    "Zoom", "Slack", "Dropbox", "Square", "Robinhood",
-    "CrowdStrike", "Palo Alto Networks", "Splunk", "ServiceNow",
-    "Workday", "HubSpot", "Airtable",
+    "Shopify",
+    "Cloudflare",
+    "Vercel",
+    "Supabase",
+    "MongoDB",
+    "Datadog",
+    "Figma",
+    "Notion",
+    "Linear",
+    "Anthropic",
+    "OpenAI",
+    "Coinbase",
+    "Block",
+    "Palantir",
+    "Snowflake",
+    "Databricks",
+    "Twilio",
+    "Okta",
+    "HashiCorp",
+    "Elastic",
+    "Confluent",
+    "Zoom",
+    "Slack",
+    "Dropbox",
+    "Square",
+    "Robinhood",
+    "CrowdStrike",
+    "Palo Alto Networks",
+    "Splunk",
+    "ServiceNow",
+    "Workday",
+    "HubSpot",
+    "Airtable",
 }
 
 TIER_AU_NOTABLE = {
-    "Atlassian", "Canva", "SafetyCulture", "Xero", "WiseTech Global",
-    "Afterpay", "Zip Co", "Culture Amp", "Employment Hero", "Deputy",
-    "Buildkite", "Envato", "Campaign Monitor", "Aconex", "Redbubble",
-    "REA Group", "Seek", "Domain", "Carsales", "Nearmap",
-    "Immutable", "Rokt", "GO1", "Eucalyptus", "Linktree",
-    "Harrison.ai", "Baraja", "Morse Micro", "Stax", "Pendula",
-    "Brighte", "Lendi", "Prospa", "Tyro", "Swyftx",
-    "CommBank", "Commonwealth Bank", "NAB", "Westpac", "ANZ",
-    "Telstra", "Optus", "TPG", "NBN",
-    "BHP", "Rio Tinto", "Woodside",
-    "Maptek", "Santos", "CSL", "Cochlear",
+    "Atlassian",
+    "Canva",
+    "SafetyCulture",
+    "Xero",
+    "WiseTech Global",
+    "Afterpay",
+    "Zip Co",
+    "Culture Amp",
+    "Employment Hero",
+    "Deputy",
+    "Buildkite",
+    "Envato",
+    "Campaign Monitor",
+    "Aconex",
+    "Redbubble",
+    "REA Group",
+    "Seek",
+    "Domain",
+    "Carsales",
+    "Nearmap",
+    "Immutable",
+    "Rokt",
+    "GO1",
+    "Eucalyptus",
+    "Linktree",
+    "Harrison.ai",
+    "Baraja",
+    "Morse Micro",
+    "Stax",
+    "Pendula",
+    "Brighte",
+    "Lendi",
+    "Prospa",
+    "Tyro",
+    "Swyftx",
+    "CommBank",
+    "Commonwealth Bank",
+    "NAB",
+    "Westpac",
+    "ANZ",
+    "Telstra",
+    "Optus",
+    "TPG",
+    "NBN",
+    "BHP",
+    "Rio Tinto",
+    "Woodside",
+    "Maptek",
+    "Santos",
+    "CSL",
+    "Cochlear",
 }
 
 # ── Role search terms (priority order) ──────────────────────────────────────
@@ -81,133 +166,186 @@ ROLE_SEARCHES = [
 ]
 
 
-# ─── Resume Parser ───────────────────────────────────────────────────────────
-
-def parse_latex_resume(resume_dir: str | Path) -> dict:
-    """Parse all .tex files in resume_dir and extract structured profile data."""
-    resume_dir = Path(resume_dir)
-    tex_files = list(resume_dir.rglob("*.tex"))
-
-    if not tex_files:
-        print(f"  No .tex files found in {resume_dir}")
-        return {"skills": [], "titles": [], "keywords": []}
-
-    all_text = ""
-    for f in tex_files:
-        all_text += f.read_text(errors="ignore") + "\n"
-
-    skills = _extract_skills(all_text)
-    titles = _extract_titles(all_text)
-    keywords = _extract_keywords(all_text)
-
-    print(f"  Parsed {len(tex_files)} .tex files")
-    print(f"  Skills ({len(skills)}): {', '.join(sorted(skills)[:20])}...")
-    print(f"  Titles ({len(titles)}): {', '.join(titles)}")
-
-    return {"skills": skills, "titles": titles, "keywords": keywords}
+# ─── Profile Loader ──────────────────────────────────────────────────────────
 
 
-def _extract_skills(text: str) -> set[str]:
-    """Extract technical skills from cvskill blocks and item descriptions."""
-    skills = set()
+def load_profile(path: str | Path) -> dict:
+    """Load a JSON profile from disk. Returns dict with skills, titles, keywords, locations, roles, weights."""
+    profile_path = Path(path)
+    if not profile_path.exists():
+        raise FileNotFoundError(f"Profile JSON not found: {profile_path}")
 
-    # From \cvskill lines: \cvskill{Category}{skill1, skill2, ...}
-    for m in re.finditer(r'\\cvskill\s*\{[^}]*\}\s*\{([^}]+)\}', text):
-        for s in re.split(r'[,;]', m.group(1)):
-            clean = s.strip().replace("\\#", "#").replace("\\&", "&")
-            clean = re.sub(r'\\texttt\{([^}]+)\}', r'\1', clean)
-            clean = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', clean)
-            clean = re.sub(r'[\\{}]', '', clean).strip()
-            if clean and len(clean) > 1:
-                skills.add(clean)
+    profile_json = json.loads(profile_path.read_text(encoding="utf-8"))
 
-    # From technology lines in cventry: {TypeScript, React, ...}
-    for m in re.finditer(r'\\cventry\s*\{([^}]+)\}', text):
-        line = m.group(1)
-        if any(kw in line.lower() for kw in ["typescript", "react", "python", "c#", "c++", "node", "sql", "django", ".net"]):
-            for s in re.split(r'[,;/]', line):
-                clean = re.sub(r'[\\{}]', '', s).strip()
-                clean = clean.replace("C\\#", "C#")
-                if clean and len(clean) > 1 and not clean.startswith('%'):
-                    skills.add(clean)
+    required_keys = ("skills", "titles", "keywords")
+    missing = [key for key in required_keys if key not in profile_json]
+    if missing:
+        missing_csv = ", ".join(missing)
+        raise ValueError(f"Profile JSON missing required keys: {missing_csv}")
 
-    return skills
+    default_locations = ["Adelaide, Australia", "Sydney, Australia", "Melbourne, Australia"]
+    default_weights = {
+        "skills": 1.0,
+        "companyTier": 1.0,
+        "location": 1.0,
+        "titleMatch": 1.0,
+        "sponsorship": 1.0,
+        "recency": 1.0,
+        "culture": 1.0,
+        "quality": 1.0,
+    }
 
+    raw_skills = profile_json.get("skills", [])
+    raw_titles = profile_json.get("titles", [])
+    raw_keywords = profile_json.get("keywords", [])
+    raw_locations = profile_json.get("locations") or default_locations
+    raw_roles = profile_json.get("roles") or ROLE_SEARCHES
+    raw_weights = profile_json.get("weights") or {}
 
-def _extract_titles(text: str) -> list[str]:
-    """Extract job titles from cventry blocks."""
-    titles = []
-    # Pattern: \cventry{Job Title}{Company}... - first arg is title
-    for m in re.finditer(r'\\cventry\s*\{([^}]+)\}\s*%?\s*(?:Job title|Job Title)?', text):
-        title = m.group(1).strip()
-        if any(kw in title.lower() for kw in ["engineer", "developer", "lead", "intern", "assistant", "evaluator"]):
-            title = re.sub(r'[\\{}]', '', title).strip()
-            if title and title not in titles:
-                titles.append(title)
-    return titles
+    tier_points = {"core": 5, "strong": 3, "peripheral": 1}
+    tier_counts = {"core": 0, "strong": 0, "peripheral": 0}
+    skills: list[str] = []
+    skill_tiers: dict[str, int] = {}
+    seen_skills: set[str] = set()
 
+    for item in raw_skills:
+        if isinstance(item, dict):
+            name = str(item.get("name", "")).strip()
+            tier = str(item.get("tier", "peripheral")).strip().lower()
+        else:
+            name = str(item).strip()
+            tier = "peripheral"
 
-def _extract_keywords(text: str) -> set[str]:
-    """Extract relevant keywords from item descriptions."""
-    keywords = set()
-    # Removed generic/short terms that cause false positives:
-    # "ai" (matches "said"/"maintain"), "rl" (matches "url"),
-    # "git" (matches "digital"), "agent", "frontend", "backend",
-    # "devops", "full-stack", "fullstack", "mobile", "ios"
-    tech_terms = [
-        "react", "typescript", "javascript", "next.js", "nextjs", "node.js",
-        "python", "django", ".net", "c#", "sql", "postgresql", "redis",
-        "docker", "kubernetes", "aws", "gcp", "azure", "vercel",
-        "tailwind", "vite", "zustand", "graphql", "rest api",
-        "machine learning", "llm", "reinforcement learning",
-        "browser-use", "agentic", "prompt engineering",
-        "ci/cd", "github actions", "microservices",
-        "capacitor", "expo",
-    ]
+        if not name:
+            continue
 
-    text_lower = text.lower()
-    for term in tech_terms:
-        # Use word-boundary matching to avoid substring false positives
-        if re.search(r'\b' + re.escape(term) + r'\b', text_lower):
-            keywords.add(term)
+        if tier not in tier_points:
+            tier = "peripheral"
 
-    return keywords
+        key = name.lower()
+        if key in seen_skills:
+            continue
+
+        seen_skills.add(key)
+        skills.append(name)
+        skill_tiers[key] = tier_points[tier]
+        tier_counts[tier] += 1
+
+    titles = [str(t).strip() for t in raw_titles if str(t).strip()]
+    keywords = [str(k).strip().lower() for k in raw_keywords if str(k).strip()]
+    locations = [str(loc).strip() for loc in raw_locations if str(loc).strip()]
+    roles = [str(role).strip() for role in raw_roles if str(role).strip()]
+
+    weights = default_weights.copy()
+    for key, default_value in default_weights.items():
+        value = raw_weights.get(key, default_value)
+        try:
+            weights[key] = float(value)
+        except (TypeError, ValueError):
+            weights[key] = default_value
+
+    print(
+        "Loaded profile: "
+        f"{len(skills)} skills "
+        f"({tier_counts['core']} core, {tier_counts['strong']} strong, {tier_counts['peripheral']} peripheral), "
+        f"{len(locations)} locations, {len(roles)} roles"
+    )
+
+    return {
+        "skills": skills,
+        "titles": titles,
+        "keywords": keywords,
+        "locations": locations,
+        "roles": roles,
+        "weights": weights,
+        "skill_tiers": skill_tiers,
+    }
 
 
 # ─── Skill Tiers (FIX 4: weight by proficiency instead of flat 3pts) ────────
 SKILL_TIERS = {
     # Core stack (5 pts) — daily drivers, resume headline skills
-    "react": 5, "typescript": 5, "next.js": 5, ".net": 5, "c#": 5,
-    "python": 5, "tailwind css": 5, "tailwind": 5,
+    "react": 5,
+    "typescript": 5,
+    "next.js": 5,
+    ".net": 5,
+    "c#": 5,
+    "python": 5,
+    "tailwind css": 5,
+    "tailwind": 5,
     # Strong (3 pts) — solid experience, used in multiple projects
-    "django": 3, "node.js": 3, "vite": 3, "zustand": 3,
-    "sql server": 3, "postgresql": 3, "docker": 3, "git": 3,
-    "github actions": 3, "vercel": 3, "javascript": 3,
+    "django": 3,
+    "node.js": 3,
+    "vite": 3,
+    "zustand": 3,
+    "sql server": 3,
+    "postgresql": 3,
+    "docker": 3,
+    "git": 3,
+    "github actions": 3,
+    "vercel": 3,
+    "javascript": 3,
     # Peripheral (1 pt) — used but not primary
-    "redis": 1, "c++": 1, "java": 1, "c": 1, "expo": 1, "capacitor": 1,
-    "clerk": 1, "stripe": 1, "neondb": 1, "drizzle orm": 1,
-    "shadcn/ui": 1, "llm": 1, "browser-use": 1, "prompt engineering": 1,
+    "redis": 1,
+    "c++": 1,
+    "java": 1,
+    "c": 1,
+    "expo": 1,
+    "capacitor": 1,
+    "clerk": 1,
+    "stripe": 1,
+    "neondb": 1,
+    "drizzle orm": 1,
+    "shadcn/ui": 1,
+    "llm": 1,
+    "browser-use": 1,
+    "prompt engineering": 1,
 }
 
 # ─── Negative Titles (FIX 6: penalize non-engineering roles) ────────────────
 NEGATIVE_TITLE_PATTERNS = [
-    "business analyst", "project manager", "product manager",
-    "it support", "it administrator", "network administrator",
-    "scrum master", "ux designer", "ui designer",
-    "sales engineer", "pre-sales", "recruiter", "talent acquisition",
-    "data entry", "helpdesk", "service desk", "desktop support",
-    "account manager", "marketing", "procurement",
+    "business analyst",
+    "project manager",
+    "product manager",
+    "it support",
+    "it administrator",
+    "network administrator",
+    "scrum master",
+    "ux designer",
+    "ui designer",
+    "sales engineer",
+    "pre-sales",
+    "recruiter",
+    "talent acquisition",
+    "data entry",
+    "helpdesk",
+    "service desk",
+    "desktop support",
+    "account manager",
+    "marketing",
+    "procurement",
 ]
 
 # ─── Visa/Sponsorship Signals (bonus for international students) ────────────
 SPONSORSHIP_SIGNALS = [
-    "visa sponsorship", "sponsor visa", "sponsorship available",
-    "pr sponsorship", "permanent residency", "work visa",
-    "482 visa", "subclass 482", "subclass 494", "subclass 189",
-    "skilled worker visa", "employer sponsored",
-    "international students welcome", "international students encouraged",
-    "open to international", "no citizenship requirement",
-    "relocation support", "relocation assistance",
+    "visa sponsorship",
+    "sponsor visa",
+    "sponsorship available",
+    "pr sponsorship",
+    "permanent residency",
+    "work visa",
+    "482 visa",
+    "subclass 482",
+    "subclass 494",
+    "subclass 189",
+    "skilled worker visa",
+    "employer sponsored",
+    "international students welcome",
+    "international students encouraged",
+    "open to international",
+    "no citizenship requirement",
+    "relocation support",
+    "relocation assistance",
 ]
 
 # ─── Skill Synonym Mapping (adjacency bonus for related tech) ────────────────
@@ -244,19 +382,32 @@ SKILL_SYNONYMS = {
 
 # ─── Culture Signals (bonus only, never penalize for absence) ────────────────
 CULTURE_SIGNALS = {
-    "remote-first": 4, "fully remote": 4, "remote friendly": 3,
-    "flexible hours": 3, "flexible work": 3, "work from home": 3,
+    "remote-first": 4,
+    "fully remote": 4,
+    "remote friendly": 3,
+    "flexible hours": 3,
+    "flexible work": 3,
+    "work from home": 3,
     "hybrid work": 2,
-    "equity": 3, "stock options": 3, "esop": 3,
-    "learning budget": 2, "professional development": 2, "conference budget": 2,
-    "mental health": 2, "wellness program": 2,
-    "4 day work week": 4, "four day work week": 4,
-    "parental leave": 2, "generous leave": 2,
-    "diversity": 1, "inclusive": 1,
+    "equity": 3,
+    "stock options": 3,
+    "esop": 3,
+    "learning budget": 2,
+    "professional development": 2,
+    "conference budget": 2,
+    "mental health": 2,
+    "wellness program": 2,
+    "4 day work week": 4,
+    "four day work week": 4,
+    "parental leave": 2,
+    "generous leave": 2,
+    "diversity": 1,
+    "inclusive": 1,
 }
 
 
 # ─── Job Scoring ─────────────────────────────────────────────────────────────
+
 
 def score_job(
     row: pd.Series,
@@ -343,25 +494,50 @@ def score_job(
     else:
         # CLI fallback: original hardcoded title_boosts
         title_boosts = {
-            "graduate developer": 18, "graduate engineer": 18,
-            "graduate software": 18, "grad developer": 18, "new grad": 18,
-            "full stack": 18, "fullstack": 18, "full-stack": 18,
-            "frontend": 15, "front-end": 15, "front end": 15,
-            "software engineer": 14, "software developer": 14,
-            "forward deployed": 14, "ai engineer": 14, "ai developer": 14,
-            "application developer": 12, "applications developer": 12,
-            "ai platform": 12, "ai infrastructure": 12,
-            "backend": 10, "back-end": 10, "back end": 10,
-            "web developer": 10, "web engineer": 10,
-            "platform engineer": 10, "infrastructure engineer": 10,
-            "devops engineer": 10, "devops": 10,
-            "site reliability": 10, "sre": 10,
-            "cloud engineer": 10, "systems engineer": 10,
+            "graduate developer": 18,
+            "graduate engineer": 18,
+            "graduate software": 18,
+            "grad developer": 18,
+            "new grad": 18,
+            "full stack": 18,
+            "fullstack": 18,
+            "full-stack": 18,
+            "frontend": 15,
+            "front-end": 15,
+            "front end": 15,
+            "software engineer": 14,
+            "software developer": 14,
+            "forward deployed": 14,
+            "ai engineer": 14,
+            "ai developer": 14,
+            "application developer": 12,
+            "applications developer": 12,
+            "ai platform": 12,
+            "ai infrastructure": 12,
+            "backend": 10,
+            "back-end": 10,
+            "back end": 10,
+            "web developer": 10,
+            "web engineer": 10,
+            "platform engineer": 10,
+            "infrastructure engineer": 10,
+            "devops engineer": 10,
+            "devops": 10,
+            "site reliability": 10,
+            "sre": 10,
+            "cloud engineer": 10,
+            "systems engineer": 10,
             "solutions engineer": 10,
-            "ml engineer": 10, "machine learning engineer": 10, "mlops": 10,
-            "integration engineer": 8, "automation engineer": 8,
-            "release engineer": 8, "build engineer": 8,
-            "test engineer": 6, "qa engineer": 6, "sdet": 6,
+            "ml engineer": 10,
+            "machine learning engineer": 10,
+            "mlops": 10,
+            "integration engineer": 8,
+            "automation engineer": 8,
+            "release engineer": 8,
+            "build engineer": 8,
+            "test engineer": 6,
+            "qa engineer": 6,
+            "sdet": 6,
         }
         best_title_boost = 0
         for term, boost in title_boosts.items():
@@ -399,15 +575,18 @@ def score_job(
     for kw in profile.get("keywords", []):
         if kw in matched_skill_terms:
             continue
-        if re.search(r'\b' + re.escape(kw) + r'\b', description):
+        if re.search(r"\b" + re.escape(kw) + r"\b", description):
             keyword_score += 2
     score += min(keyword_score, 15) * w_skills
 
     # ── Seniority scoring (NEVER weighted) ──
     seniority = str(row.get("seniority", "")) or detect_seniority(str(row.get("title", "")))
     seniority_scores = {
-        "executive": -40, "director": -35, "staff": -25,
-        "senior": -5, "lead": -5,
+        "executive": -40,
+        "director": -35,
+        "staff": -25,
+        "senior": -5,
+        "lead": -5,
         "intern": -10,
         "junior": 0,
     }
@@ -422,9 +601,14 @@ def score_job(
 
     # ── AI-adjacent vs pure ML/research penalty (NEVER weighted) ──
     pure_research_titles = [
-        "data scientist", "research scientist", "ml researcher",
-        "machine learning researcher", "nlp researcher", "cv researcher",
-        "research engineer", "applied scientist",
+        "data scientist",
+        "research scientist",
+        "ml researcher",
+        "machine learning researcher",
+        "nlp researcher",
+        "cv researcher",
+        "research engineer",
+        "applied scientist",
     ]
     if any(kw in title for kw in pure_research_titles):
         score -= 15
@@ -551,6 +735,7 @@ def detect_seniority(title: str) -> str:
 
 # ─── Smart Dedup ─────────────────────────────────────────────────────────────
 
+
 def _normalize(text: str) -> str:
     """Lowercase, strip accents, collapse whitespace/punctuation for fuzzy matching."""
     text = text.split("|")[0]  # strip suffixes like "| International Students"
@@ -570,11 +755,7 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
 
     # Pass 2: fuzzy title+company dedup (catches same job across sites)
     if "title" in df.columns and "company" in df.columns:
-        norm_key = (
-            df["title"].fillna("").apply(_normalize)
-            + "|"
-            + df["company"].fillna("").apply(_normalize)
-        )
+        norm_key = df["title"].fillna("").apply(_normalize) + "|" + df["company"].fillna("").apply(_normalize)
         df = df.loc[~norm_key.duplicated(keep="first")]
 
     dupes = before - len(df)
@@ -585,6 +766,7 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─── Scraping ────────────────────────────────────────────────────────────────
+
 
 def run_search(search_term: str, location: str, defaults: dict) -> pd.DataFrame | None:
     """Run one scrape and return the results."""
@@ -598,7 +780,6 @@ def run_search(search_term: str, location: str, defaults: dict) -> pd.DataFrame 
         "hours_old": defaults.get("hours_old", 72),
         "description_format": "markdown",
         "country_indeed": "Australia",
-
         "verbose": 0,
     }
 
@@ -641,7 +822,7 @@ def scrape_all(locations: list[str], search_terms: list[str], defaults: dict) ->
         print(f"\n  [{city}]")
 
         # GradConnection: once per city (ignores search terms)
-        print(f"  GradConnection...", end="", flush=True)
+        print("  GradConnection...", end="", flush=True)
         gc_jobs = scrape_gradconnection("", city)
         print(f" {len(gc_jobs)}")
         if gc_jobs:
@@ -657,13 +838,13 @@ def scrape_all(locations: list[str], search_terms: list[str], defaults: dict) ->
                 all_dfs.append(result)
 
             # Seek + LinkedIn: per city × per term
-            print(f"           AU:", end=" ")
+            print("           AU:", end=" ")
             au_jobs = scrape_au_sites(term, city)
             if au_jobs:
                 all_dfs.append(pd.DataFrame(au_jobs))
 
     # ── National sources (called once per search term, not per city) ──────
-    print(f"\n  [Prosple — national]")
+    print("\n  [Prosple — national]")
     for j, term in enumerate(search_terms, 1):
         print(f"  ({j}/{len(search_terms)}) Prosple: {term}...", end=" ", flush=True)
         prosple_jobs = scrape_prosple(term, "australia")
@@ -672,7 +853,7 @@ def scrape_all(locations: list[str], search_terms: list[str], defaults: dict) ->
             all_dfs.append(pd.DataFrame(prosple_jobs))
 
     # ── Remote-only pass: JobSpy with is_remote ───────────────────────────
-    print(f"\n  [Remote]")
+    print("\n  [Remote]")
     for j, term in enumerate(search_terms, 1):
         print(f"  ({j}/{len(search_terms)}) Remote JobSpy: {term}...", end=" ", flush=True)
         remote_kwargs = {
@@ -683,7 +864,6 @@ def scrape_all(locations: list[str], search_terms: list[str], defaults: dict) ->
             "hours_old": defaults.get("hours_old", 72),
             "description_format": "markdown",
             "country_indeed": "Australia",
-
             "is_remote": True,
             "verbose": 0,
         }
@@ -712,6 +892,7 @@ def scrape_all(locations: list[str], search_terms: list[str], defaults: dict) ->
 
 # ─── Output ──────────────────────────────────────────────────────────────────
 
+
 def save_results(df: pd.DataFrame, name: str, output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -730,17 +911,28 @@ def print_results(df: pd.DataFrame, label: str, limit: int = 0):
     available = [c for c in cols if c in df.columns]
     display = df if limit == 0 else df.head(limit)
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  {label}: {len(df)} jobs")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(display[available].to_string(index=False, max_colwidth=35))
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
+
+def _normalize_au_location(location: str) -> str:
+    """Normalize user-friendly city strings into 'City, Australia'."""
+    loc = str(location).strip()
+    if not loc:
+        return loc
+    city = loc.split(",")[0].strip()
+    return f"{city}, Australia"
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Job Hunter - Australian jobs matched to your resume")
-    parser.add_argument("--resume-dir", type=str, default="resumes", help="Path to resume .tex files")
+    parser = argparse.ArgumentParser(description="Job Hunter - Australian jobs matched to your profile")
+    parser.add_argument("--profile", type=str, default="profile.json", help="Path to profile JSON file")
+    parser.add_argument("--resume-dir", type=str, default=None, help="Deprecated alias for --profile")
     parser.add_argument("--search", type=str, help="Override search terms with a single custom term")
     parser.add_argument("--location", type=str, help="Single location override (e.g. 'Sydney')")
     parser.add_argument("--sites", type=str, nargs="+", default=SITES)
@@ -748,32 +940,42 @@ def main():
     parser.add_argument("--hours", type=int, default=72, help="Max hours since posted")
     parser.add_argument("--big-tech", action="store_true", help="Show only big tech / notable companies")
     parser.add_argument("--job-type", type=str, choices=["fulltime", "parttime", "internship", "contract"])
-    parser.add_argument("--seniority", type=str, nargs="+",
-                        choices=["intern", "junior", "mid", "senior", "lead", "staff", "director", "executive"],
-                        help="Filter to specific seniority levels (e.g. --seniority junior mid)")
-    parser.add_argument("--no-senior", action="store_true",
-                        help="Exclude senior+ roles (senior, lead, staff, director, executive)")
+    parser.add_argument(
+        "--seniority",
+        type=str,
+        nargs="+",
+        choices=["intern", "junior", "mid", "senior", "lead", "staff", "director", "executive"],
+        help="Filter to specific seniority levels (e.g. --seniority junior mid)",
+    )
+    parser.add_argument(
+        "--no-senior", action="store_true", help="Exclude senior+ roles (senior, lead, staff, director, executive)"
+    )
     parser.add_argument("--top", type=int, default=30, help="Number of top results to display")
     parser.add_argument("--output", type=str, default="jobs")
 
     args = parser.parse_args()
 
-    # 1. Parse resume
-    print("\n[1/3] Parsing resume...")
-    profile = parse_latex_resume(args.resume_dir)
+    if args.resume_dir:
+        print("  Warning: --resume-dir is deprecated; use --profile instead.")
+        if args.profile == "profile.json":
+            args.profile = args.resume_dir
+
+    # 1. Load profile
+    print("\n[1/3] Loading profile...")
+    profile_data = load_profile(args.profile)
+    profile = {
+        "skills": profile_data["skills"],
+        "titles": profile_data["titles"],
+        "keywords": profile_data["keywords"],
+    }
 
     # 2. Determine search parameters
     if args.location:
-        # Map short names to full
-        loc_map = {
-            "adelaide": "Adelaide, Australia", "sydney": "Sydney, Australia",
-            "melbourne": "Melbourne, Australia",
-        }
-        locations = [loc_map.get(args.location.lower(), args.location)]
+        locations = [_normalize_au_location(args.location)]
     else:
-        locations = LOCATIONS
+        locations = [_normalize_au_location(loc) for loc in profile_data["locations"]]
 
-    search_terms = [args.search] if args.search else ROLE_SEARCHES
+    search_terms = [args.search] if args.search else profile_data["roles"]
 
     defaults = {
         "sites": args.sites,
@@ -783,7 +985,8 @@ def main():
     }
 
     # 3. Scrape
-    print(f"\n[2/3] Scraping {len(locations)} locations x {len(search_terms)} roles = {len(locations)*len(search_terms)} searches...")
+    total_searches = len(locations) * len(search_terms)
+    print(f"\n[2/3] Scraping {len(locations)} locations x {len(search_terms)} roles = {total_searches} searches...")
     jobs = scrape_all(locations, search_terms, defaults)
 
     if jobs.empty:
@@ -794,7 +997,7 @@ def main():
     if "location" in jobs.columns:
         target_cities = {"adelaide", "sydney", "melbourne", "remote", "australia"}
         loc_lower = jobs["location"].fillna("").str.lower()
-        au_mask = loc_lower.apply(lambda l: any(c in l for c in target_cities))
+        au_mask = loc_lower.apply(lambda loc_text: any(c in loc_text for c in target_cities))
         before = len(jobs)
         jobs = jobs[au_mask].reset_index(drop=True)
         filtered = before - len(jobs)
@@ -802,11 +1005,19 @@ def main():
             print(f"  Filtered out {filtered} non-target-city jobs (keeping Adelaide/Sydney/Melbourne/Remote)")
 
     # 4. Score and rank
-    print(f"\n[3/3] Scoring {len(jobs)} jobs against your resume...")
+    print(f"\n[3/3] Scoring {len(jobs)} jobs against your profile...")
     jobs["tier"] = jobs["company"].apply(classify_company) if "company" in jobs.columns else ""
     jobs["seniority"] = jobs["title"].apply(detect_seniority) if "title" in jobs.columns else ""
     jobs["seniority"] = jobs["seniority"].replace("", "mid")
-    jobs["score"] = jobs.apply(lambda row: score_job(row, profile), axis=1)
+    jobs["score"] = jobs.apply(
+        lambda row: score_job(
+            row,
+            profile,
+            weights=profile_data["weights"],
+            skill_tiers=profile_data["skill_tiers"],
+        ),
+        axis=1,
+    )
 
     # Seniority filtering
     if args.no_senior:
@@ -840,7 +1051,7 @@ def main():
         else:
             print("\nNo notable company jobs found.")
     else:
-        print_results(jobs, f"TOP {args.top} JOBS (ranked by resume match)", args.top)
+        print_results(jobs, f"TOP {args.top} JOBS (ranked by profile match)", args.top)
 
         # Also show notable companies
         notable = jobs[jobs["tier"] != ""]
@@ -848,9 +1059,9 @@ def main():
             print_results(notable, "BIG TECH / NOTABLE COMPANIES")
 
     # Stats
-    print(f"\n{'='*70}")
-    print(f"  STATS")
-    print(f"{'='*70}")
+    print(f"\n{'=' * 70}")
+    print("  STATS")
+    print(f"{'=' * 70}")
     print(f"  Total unique jobs: {len(jobs)}")
 
     if "site" in jobs.columns:

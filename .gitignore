@@ -16,6 +16,7 @@ jobs/email_preview.html
 
 # Personal config
 config/search.json
+profile.json
 .env
 
 # Resumes (bring your own — only README.md is tracked)
@@ -45,11 +46,8 @@ web/generated/
 # Screenshots (dev only)
 *.png
 
-# Claude agent skills (symlinks to external packages)
-.claude/skills/*
-!.claude/skills/linkedin-easy-apply/
-
-# Agent/cursor local config
+# Local assistant/editor config
+.claude/
 .agent/
 .cursor/
 
