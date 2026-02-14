@@ -886,217 +886,325 @@ export default function Home() {
         <section className="relative z-10 mx-auto max-w-4xl px-6 py-10">
           <div className="mb-8">
             <h1 className="font-serif text-3xl text-white mb-2 md:text-4xl">
-              GitHub <span className="text-amber-400">Automation Setup</span>
+              Daily <span className="text-amber-400">Automation Setup</span>
             </h1>
             <p className="font-sans text-navy-300 max-w-2xl">
-              Connect GitHub with Device Flow OAuth, configure email delivery,
-              then deploy a daily workflow that runs with your profile.
+              {process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID
+                ? "Connect GitHub with Device Flow OAuth, configure email delivery, then deploy a daily workflow that runs with your profile."
+                : "Set up GitHub Actions to scrape job boards and email you results every day."}
             </p>
           </div>
 
-          <div className="mb-6 rounded-xl border border-navy-700 bg-navy-800/40 p-5">
-            <p className="mb-4 font-sans text-xs uppercase tracking-wide text-navy-400">
-              Setup Progress
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              {[
-                { label: "Connect GitHub", status: connectStatus },
-                { label: "Configure Email", status: configureStatus },
-                { label: "Deploy Automation", status: deployStatus },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-3 rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-3"
-                >
-                  <ProgressDot status={item.status} />
-                  <span className="font-sans text-sm text-navy-100">{item.label}</span>
+          {process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID ? (
+            <>
+              <div className="mb-6 rounded-xl border border-navy-700 bg-navy-800/40 p-5">
+                <p className="mb-4 font-sans text-xs uppercase tracking-wide text-navy-400">
+                  Setup Progress
+                </p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {[
+                    { label: "Connect GitHub", status: connectStatus },
+                    { label: "Configure Email", status: configureStatus },
+                    { label: "Deploy Automation", status: deployStatus },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center gap-3 rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-3"
+                    >
+                      <ProgressDot status={item.status} />
+                      <span className="font-sans text-sm text-navy-100">{item.label}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <ProgressDot status={connectStatus} />
-                <h2 className="font-serif text-2xl text-white">1. Connect GitHub</h2>
               </div>
 
-              {!githubToken && (
-                <button
-                  type="button"
-                  onClick={requestDeviceCode}
-                  disabled={isRequestingDeviceCode || isPollingToken}
-                  className={`rounded-xl px-5 py-3 font-sans text-sm font-semibold transition-colors ${
-                    isRequestingDeviceCode || isPollingToken
-                      ? "bg-navy-700 text-navy-400 cursor-not-allowed"
-                      : "bg-amber-500 text-navy-950 hover:bg-amber-400"
-                  }`}
-                >
-                  {isRequestingDeviceCode
-                    ? "Requesting Device Code..."
-                    : isPollingToken
-                      ? "Waiting for Authorization..."
-                      : "Connect GitHub"}
-                </button>
-              )}
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <ProgressDot status={connectStatus} />
+                    <h2 className="font-serif text-2xl text-white">1. Connect GitHub</h2>
+                  </div>
 
-              {deviceCode && !githubToken && (
-                <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-                  <p className="font-sans text-xs uppercase tracking-wide text-amber-300 mb-2">
-                    Enter this code on GitHub
+                  {!githubToken && (
+                    <button
+                      type="button"
+                      onClick={requestDeviceCode}
+                      disabled={isRequestingDeviceCode || isPollingToken}
+                      className={`rounded-xl px-5 py-3 font-sans text-sm font-semibold transition-colors ${
+                        isRequestingDeviceCode || isPollingToken
+                          ? "bg-navy-700 text-navy-400 cursor-not-allowed"
+                          : "bg-amber-500 text-navy-950 hover:bg-amber-400"
+                      }`}
+                    >
+                      {isRequestingDeviceCode
+                        ? "Requesting Device Code..."
+                        : isPollingToken
+                          ? "Waiting for Authorization..."
+                          : "Connect GitHub"}
+                    </button>
+                  )}
+
+                  {deviceCode && !githubToken && (
+                    <div className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                      <p className="font-sans text-xs uppercase tracking-wide text-amber-300 mb-2">
+                        Enter this code on GitHub
+                      </p>
+                      <p className="font-mono text-2xl font-bold text-white tracking-[0.25em] mb-3">
+                        {deviceCode.user_code}
+                      </p>
+                      <a
+                        href={deviceCode.verification_uri}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-sans text-sm text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                      >
+                        Open GitHub verification page
+                      </a>
+                      <p className="mt-3 font-sans text-xs text-navy-300">
+                        Polling every {pollingIntervalSeconds}s until authorization completes.
+                      </p>
+                    </div>
+                  )}
+
+                  {githubToken && (
+                    <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                      <p className="font-sans text-sm text-emerald-300">
+                        GitHub connected successfully.
+                      </p>
+                    </div>
+                  )}
+
+                  {connectError && (
+                    <p className="mt-3 font-sans text-sm text-rose-400">{connectError}</p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <ProgressDot status={configureStatus} />
+                    <h2 className="font-serif text-2xl text-white">2. Configure Email</h2>
+                  </div>
+
+                  <div className="grid gap-4">
+                    <label className="block">
+                      <span className="mb-2 block font-sans text-sm text-navy-300">Gmail Address</span>
+                      <input
+                        type="email"
+                        value={gmailUser}
+                        onChange={(event) => setGmailUser(event.target.value)}
+                        placeholder="you@gmail.com"
+                        className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block font-sans text-sm text-navy-300">Gmail App Password</span>
+                      <input
+                        type="password"
+                        value={gmailAppPassword}
+                        onChange={(event) => setGmailAppPassword(event.target.value)}
+                        placeholder="16-character app password"
+                        className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block font-sans text-sm text-navy-300">
+                        Recipient Emails (comma-separated)
+                      </span>
+                      <input
+                        type="text"
+                        value={emailTo}
+                        onChange={(event) => setEmailTo(event.target.value)}
+                        placeholder="you@gmail.com, team@company.com"
+                        className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
+                      />
+                    </label>
+                  </div>
+
+                  <p className="mt-4 font-sans text-xs text-navy-400">
+                    Need an app password?{" "}
+                    <a
+                      href="https://myaccount.google.com/apppasswords"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                    >
+                      Generate one in Google Account settings
+                    </a>
+                    .
                   </p>
-                  <p className="font-mono text-2xl font-bold text-white tracking-[0.25em] mb-3">
-                    {deviceCode.user_code}
-                  </p>
-                  <a
-                    href={deviceCode.verification_uri}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-sans text-sm text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                </div>
+
+                <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <ProgressDot status={deployStatus} />
+                    <h2 className="font-serif text-2xl text-white">3. Deploy</h2>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDeploy}
+                    disabled={isDeploying || !githubToken || !emailConfigValid || !profileJson}
+                    className={`rounded-xl px-5 py-3 font-sans text-sm font-semibold transition-colors ${
+                      isDeploying || !githubToken || !emailConfigValid || !profileJson
+                        ? "bg-navy-700 text-navy-400 cursor-not-allowed"
+                        : "bg-amber-500 text-navy-950 hover:bg-amber-400"
+                    }`}
                   >
-                    Open GitHub verification page
-                  </a>
-                  <p className="mt-3 font-sans text-xs text-navy-300">
-                    Polling every {pollingIntervalSeconds}s until authorization completes.
-                  </p>
+                    {isDeploying ? "Deploying Automation..." : "Deploy Automation"}
+                  </button>
+
+                  <div className="mt-5 space-y-2">
+                    {DEPLOY_TASK_ORDER.map((task) => (
+                      <div
+                        key={task}
+                        className="flex items-center gap-3 rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-2.5"
+                      >
+                        <ProgressDot status={deployTaskStatus[task]} />
+                        <span className="font-sans text-sm text-navy-200">
+                          {DEPLOY_TASK_LABELS[task]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {deployError && (
+                    <p className="mt-4 font-sans text-sm text-rose-400">{deployError}</p>
+                  )}
+
+                  {deployResult?.success && (
+                    <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                      <p className="mb-3 font-sans text-sm text-emerald-300">
+                        Automation deployed successfully.
+                      </p>
+                      <div className="flex flex-col gap-2 font-sans text-sm">
+                        <a
+                          href={deployResult.repoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                        >
+                          Open forked repository
+                        </a>
+                        <a
+                          href={deployResult.actionsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                        >
+                          Open GitHub Actions
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {githubToken && (
-                <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <p className="font-sans text-sm text-emerald-300">
-                    GitHub connected successfully.
-                  </p>
-                </div>
-              )}
-
-              {connectError && (
-                <p className="mt-3 font-sans text-sm text-rose-400">{connectError}</p>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <ProgressDot status={configureStatus} />
-                <h2 className="font-serif text-2xl text-white">2. Configure Email</h2>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6">
+                <p className="font-sans text-sm text-amber-300 mb-1">
+                  Follow these steps to set up daily job scraping on your GitHub fork.
+                </p>
+                <p className="font-sans text-xs text-navy-400">
+                  Make sure you&apos;ve downloaded your <code className="text-amber-300/80">profile.json</code> from the previous step.
+                </p>
               </div>
 
-              <div className="grid gap-4">
-                <label className="block">
-                  <span className="mb-2 block font-sans text-sm text-navy-300">Gmail Address</span>
-                  <input
-                    type="email"
-                    value={gmailUser}
-                    onChange={(event) => setGmailUser(event.target.value)}
-                    placeholder="you@gmail.com"
-                    className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block font-sans text-sm text-navy-300">Gmail App Password</span>
-                  <input
-                    type="password"
-                    value={gmailAppPassword}
-                    onChange={(event) => setGmailAppPassword(event.target.value)}
-                    placeholder="16-character app password"
-                    className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block font-sans text-sm text-navy-300">
-                    Recipient Emails (comma-separated)
-                  </span>
-                  <input
-                    type="text"
-                    value={emailTo}
-                    onChange={(event) => setEmailTo(event.target.value)}
-                    placeholder="you@gmail.com, team@company.com"
-                    className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
-                  />
-                </label>
-              </div>
-
-              <p className="mt-4 font-sans text-xs text-navy-400">
-                Need an app password?{" "}
+              <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                <h2 className="font-serif text-2xl text-white mb-4">1. Fork the repository</h2>
+                <p className="font-sans text-sm text-navy-300 mb-3">
+                  Fork this repo to your GitHub account:
+                </p>
                 <a
-                  href="https://myaccount.google.com/apppasswords"
+                  href="https://github.com/elvistranhere/job-hunter/fork"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                  className="inline-block rounded-xl bg-amber-500 px-5 py-3 font-sans text-sm font-semibold text-navy-950 hover:bg-amber-400 transition-colors"
                 >
-                  Generate one in Google Account settings
+                  Fork on GitHub
                 </a>
-                .
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <ProgressDot status={deployStatus} />
-                <h2 className="font-serif text-2xl text-white">3. Deploy</h2>
               </div>
 
-              <button
-                type="button"
-                onClick={handleDeploy}
-                disabled={isDeploying || !githubToken || !emailConfigValid || !profileJson}
-                className={`rounded-xl px-5 py-3 font-sans text-sm font-semibold transition-colors ${
-                  isDeploying || !githubToken || !emailConfigValid || !profileJson
-                    ? "bg-navy-700 text-navy-400 cursor-not-allowed"
-                    : "bg-amber-500 text-navy-950 hover:bg-amber-400"
-                }`}
-              >
-                {isDeploying ? "Deploying Automation..." : "Deploy Automation"}
-              </button>
-
-              <div className="mt-5 space-y-2">
-                {DEPLOY_TASK_ORDER.map((task) => (
-                  <div
-                    key={task}
-                    className="flex items-center gap-3 rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-2.5"
-                  >
-                    <ProgressDot status={deployTaskStatus[task]} />
-                    <span className="font-sans text-sm text-navy-200">
-                      {DEPLOY_TASK_LABELS[task]}
-                    </span>
-                  </div>
-                ))}
+              <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                <h2 className="font-serif text-2xl text-white mb-4">2. Add your profile</h2>
+                <p className="font-sans text-sm text-navy-300 mb-3">
+                  Commit the <code className="text-amber-300/80">profile.json</code> you downloaded to the root of your fork:
+                </p>
+                <pre className="rounded-xl border border-navy-700 bg-navy-950/70 p-4 text-xs text-navy-100 font-mono leading-relaxed overflow-x-auto">
+{`git add -f profile.json
+git commit -m "Add my profile"
+git push`}
+                </pre>
               </div>
 
-              {deployError && (
-                <p className="mt-4 font-sans text-sm text-rose-400">{deployError}</p>
-              )}
-
-              {deployResult?.success && (
-                <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <p className="mb-3 font-sans text-sm text-emerald-300">
-                    Automation deployed successfully.
-                  </p>
-                  <div className="flex flex-col gap-2 font-sans text-sm">
-                    <a
-                      href={deployResult.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
-                    >
-                      Open forked repository
-                    </a>
-                    <a
-                      href={deployResult.actionsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
-                    >
-                      Open GitHub Actions
-                    </a>
-                  </div>
+              <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                <h2 className="font-serif text-2xl text-white mb-4">3. Set repository secrets</h2>
+                <p className="font-sans text-sm text-navy-300 mb-3">
+                  Go to your fork&apos;s <strong className="text-white">Settings &rarr; Secrets and variables &rarr; Actions</strong> and add:
+                </p>
+                <div className="space-y-2">
+                  {[
+                    { name: "GMAIL_USER", desc: "Your Gmail address (e.g. you@gmail.com)" },
+                    { name: "GMAIL_APP_PASSWORD", desc: "Gmail App Password (16-character)" },
+                    { name: "EMAIL_TO", desc: "Comma-separated recipient emails" },
+                  ].map((secret) => (
+                    <div key={secret.name} className="flex items-start gap-3 rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-3">
+                      <code className="font-mono text-sm text-amber-300 whitespace-nowrap">{secret.name}</code>
+                      <span className="font-sans text-sm text-navy-400">{secret.desc}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
+                <p className="mt-4 font-sans text-xs text-navy-400">
+                  Need an app password?{" "}
+                  <a
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                  >
+                    Generate one in Google Account settings
+                  </a>
+                  .
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                <h2 className="font-serif text-2xl text-white mb-4">4. Enable the workflow</h2>
+                <ol className="space-y-3 font-sans text-sm text-navy-300">
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-semibold shrink-0">a.</span>
+                    <span>Go to your fork&apos;s <strong className="text-white">Actions</strong> tab and click &ldquo;I understand my workflows, go ahead and enable them&rdquo;</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 font-semibold shrink-0">b.</span>
+                    <span>Edit <code className="text-amber-300/80">.github/workflows/daily-jobs.yml</code> and uncomment the cron schedule:</span>
+                  </li>
+                </ol>
+                <pre className="mt-3 rounded-xl border border-navy-700 bg-navy-950/70 p-4 text-xs font-mono leading-relaxed overflow-x-auto">
+                  <span className="text-rose-400">{`  # schedule:
+  #   - cron: '0 21 * * *'`}</span>
+                  <span className="text-navy-500">{`  ← remove the # to get:`}</span>
+{`
+`}
+                  <span className="text-emerald-400">{`  schedule:
+    - cron: '0 21 * * *'`}</span>
+                  <span className="text-navy-500">{`    # 9pm UTC = 7am AEST`}</span>
+                </pre>
+              </div>
+
+              <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
+                <h2 className="font-serif text-2xl text-white mb-4">5. Run it now</h2>
+                <p className="font-sans text-sm text-navy-300 mb-3">
+                  Go to <strong className="text-white">Actions &rarr; Daily Jobs &rarr; Run workflow</strong> to trigger the first run. You&apos;ll receive an email with ranked job results within ~15 minutes.
+                </p>
+                <p className="font-sans text-sm text-navy-300">
+                  After that, the cron runs automatically every day.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
             <button

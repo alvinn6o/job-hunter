@@ -77,18 +77,35 @@ GMAIL_USER=you@gmail.com GMAIL_APP_PASSWORD=xxxx EMAIL_TO=you@gmail.com \
 
 ## Daily Automation (GitHub Actions)
 
-1. Fork this repo (or use the web app's automated setup)
-2. Add `profile.json` to your fork:
+1. **Fork this repo** — click [Fork](https://github.com/elvistranhere/job-hunter/fork) on GitHub
+2. **Add your `profile.json`** (generated from the web app or copied from `profile.example.json`):
    ```bash
-   git add -f profile.json && git commit -m "Add profile" && git push
+   git add -f profile.json && git commit -m "Add my profile" && git push
    ```
-3. Add repository secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `EMAIL_TO`
-4. Enable Actions and uncomment the cron line in `.github/workflows/daily-jobs.yml`
-5. Done — the workflow runs daily and emails you ranked job matches
+3. **Set repository secrets** — go to your fork's **Settings > Secrets and variables > Actions** and add:
+   | Secret | Value |
+   |--------|-------|
+   | `GMAIL_USER` | Your Gmail address |
+   | `GMAIL_APP_PASSWORD` | [Gmail App Password](https://myaccount.google.com/apppasswords) (16-character) |
+   | `EMAIL_TO` | Comma-separated recipient emails |
+4. **Enable Actions** — go to your fork's **Actions** tab, click "I understand my workflows, go ahead and enable them"
+5. **Uncomment the cron schedule** — edit `.github/workflows/daily-jobs.yml` and change:
+   ```yaml
+   # schedule:
+   #   - cron: '0 21 * * *'
+   ```
+   to:
+   ```yaml
+   schedule:
+     - cron: '0 21 * * *'   # 9pm UTC = 7am AEST
+   ```
+6. **Trigger the first run** — go to **Actions > Daily Jobs > Run workflow**
+
+You'll receive an email with ranked job results within ~15 minutes. After that, the cron runs daily.
 
 ### Gmail App Password
 
-Go to [Google Account > App Passwords](https://myaccount.google.com/apppasswords), generate one for "Mail", and use it as `GMAIL_APP_PASSWORD`.
+Go to [Google Account > App Passwords](https://myaccount.google.com/apppasswords), generate one for "Mail", and use it as `GMAIL_APP_PASSWORD`. You need 2-Step Verification enabled on your Google account first.
 
 ## Job Boards
 
