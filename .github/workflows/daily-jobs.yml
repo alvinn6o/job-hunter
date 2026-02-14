@@ -5,14 +5,6 @@ on:
   #   - cron: '0 21 * * *'  # Uncomment after setup (9pm UTC = 7am AEST)
   workflow_dispatch:
     inputs:
-      mode:
-        description: 'Run mode'
-        required: false
-        default: 'cli'
-        type: choice
-        options:
-          - cli
-          - web
       full_run:
         description: 'Run full search matrix (all locations x all roles)'
         required: false
@@ -34,8 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cli:
-    if: ${{ inputs.mode != 'web' }}
+  scrape-and-email:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -91,35 +82,3 @@ jobs:
           name: jobs
           path: jobs/
           retention-days: 7
-
-  web:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'web' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      APP_URL: ${{ secrets.APP_URL }}
-      CRON_SECRET: ${{ secrets.CRON_SECRET }}
-
-    steps:
-      - name: Validate required secrets
-        run: |
-          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "::error::APP_URL and CRON_SECRET must be set as repository secrets."
-            exit 1
-          fi
-
-      - name: Trigger web daily digest
-        run: |
-          response_file=$(mktemp)
-          http_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST \
-            "$APP_URL/api/cron/daily-digest" \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            -H "Content-Type: application/json")
-
-          echo "HTTP $http_code"
-          cat "$response_file"
-
-          if [ "$http_code" != "200" ]; then
-            echo "::error::Cron endpoint returned HTTP $http_code"
-            exit 1
-          fi

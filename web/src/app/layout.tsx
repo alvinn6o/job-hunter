@@ -3,8 +3,6 @@ import "~/styles/globals.css";
 import { type Metadata } from "next";
 import { Instrument_Serif, DM_Sans } from "next/font/google";
 
-import { TRPCReactProvider } from "~/trpc/react";
-
 const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
@@ -35,7 +33,7 @@ export default function RootLayout({
     >
       <body className="bg-navy-950 text-white antialiased">
         <div className="grain-overlay" />
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        {children}
       </body>
     </html>
   );

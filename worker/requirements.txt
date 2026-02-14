@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-pandas
-beautifulsoup4
-requests
-python-jobspy
-openpyxl
-nodriver

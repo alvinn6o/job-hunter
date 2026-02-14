@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { api } from "~/trpc/react";
+
+interface ParsedProfile {
+  rawText: string;
+  skills: { name: string; tier: "core" | "strong" | "peripheral" }[];
+  titles: string[];
+  keywords: string[];
+  experience: { years: number; level: string } | null;
+  suggestedLocations: string[];
+  suggestedRoles: string[];
+  aiResponse: string;
+}
 
 function FileIcon({ className }: { className?: string }) {
   return (
@@ -73,23 +82,13 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-export function UploadForm() {
-  const router = useRouter();
+export function UploadForm({ onParsed }: { onParsed: (profile: ParsedProfile) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [email, setEmail] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const parseResume = api.submission.parseResume.useMutation({
-    onSuccess: (data) => {
-      router.push(`/profile/${data.id}`);
-    },
-    onError: (err) => {
-      setError(err.message);
-    },
-  });
+  const [isLoading, setIsLoading] = useState(false);
 
   const validateFile = useCallback((f: File): string | null => {
     if (f.type !== "application/pdf") {
@@ -176,31 +175,29 @@ export function UploadForm() {
       return;
     }
 
-    if (!email.trim()) {
-      setError("Please enter your email address.");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
+    setIsLoading(true);
     try {
       const resumeBase64 = await fileToBase64(file);
 
-      parseResume.mutate({
-        email: email.trim(),
-        resumeBase64,
-        fileName: file.name,
+      const res = await fetch("/api/parse-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeBase64 }),
       });
-    } catch {
-      setError("Failed to read file. Please try again.");
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to parse resume");
+      }
+
+      const profile = await res.json() as ParsedProfile;
+      onParsed(profile);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to parse resume. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  const isLoading = parseResume.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto">
@@ -299,31 +296,6 @@ export function UploadForm() {
         </div>
       </div>
 
-      {/* Email Input */}
-      <div className="mt-6">
-        <label
-          htmlFor="email"
-          className="block font-sans text-sm font-medium text-navy-300 mb-2 tracking-wide uppercase"
-        >
-          Email address
-        </label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          className="
-            w-full rounded-xl border border-navy-600 bg-navy-800/80
-            px-5 py-3.5 font-sans text-base text-white
-            placeholder:text-navy-500
-            focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30
-            transition-all duration-200
-          "
-          disabled={isLoading}
-        />
-      </div>
-
       {/* Error message */}
       {error && (
         <div className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
@@ -334,13 +306,13 @@ export function UploadForm() {
       {/* Submit button */}
       <button
         type="submit"
-        disabled={isLoading || !file || !email.trim()}
+        disabled={isLoading || !file}
         className={`
           mt-8 w-full rounded-xl px-8 py-4
           font-sans text-base font-semibold tracking-wide
           transition-all duration-300 ease-out
           ${
-            isLoading || !file || !email.trim()
+            isLoading || !file
               ? "bg-navy-700 text-navy-400 cursor-not-allowed"
               : "bg-amber-500 text-navy-950 hover:bg-amber-400 hover:shadow-lg hover:shadow-amber-500/20 active:scale-[0.98]"
           }

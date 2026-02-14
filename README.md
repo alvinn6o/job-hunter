@@ -1,98 +1,128 @@
 # Job Hunter AU
 
-A job-hunting app with two supported modes on one unified automation path:
+Automated job discovery for Australia. Upload your resume, AI parses your skills, then GitHub Actions scrapes 5 job boards daily and emails you ranked results.
 
-1. **CLI mode**: edit `profile.json`, run scraper locally or via GitHub Actions
-2. **Web mode**: use the web app for resume parsing + subscriptions, then GitHub Actions triggers web cron
+**Zero hosting required** — just a profile file and a GitHub Actions cron job.
 
-`profile.json` is deterministic after resume parsing/customization, so daily scraping does not need extra AI calls.
+## How It Works
 
-## Quick Start (CLI)
+```text
+Resume PDF                     GitHub Actions (your fork)
+    |                          +--------------------------+
+    v                          |  daily-jobs.yml (cron)   |
+ Web App (local)               |                          |
+ npm run dev                   |  1. Read profile.json    |
+    |                          |  2. Scrape 5 job boards  |
+    +--> profile.json --+--->  |  3. Score & rank jobs    |
+                        |      |  4. Email digest          |
+                        |      +--------------------------+
+                        |
+                        +---> Or run locally:
+                              uv run python scrape.py
+```
 
-1. Fork + clone this repo
-2. Create your profile and edit it with your skills/preferences:
+## Quick Start
+
+### Option A: Web App (recommended)
+
+The web app parses your resume with AI and lets you customize scoring — then sets up GitHub Actions automatically.
 
 ```bash
+cd web
+cp .env.example .env        # Add your GEMINI_API_KEY
+npm install
+npm run dev                  # Opens on localhost:3006
+```
+
+1. Upload your resume PDF
+2. Review and customize skill tiers, scoring weights, locations, and roles
+3. Download `profile.json`
+4. Click "Set Up Automation" to fork, configure secrets, and enable daily cron — all from the browser
+
+### Option B: CLI Only
+
+```bash
+# 1. Create your profile
 cp profile.example.json profile.json
-```
+# Edit profile.json with your skills, locations, roles, and weights
 
-3. Install dependencies:
-
-```bash
+# 2. Install Python dependencies
 uv sync
-```
 
-4. Run a focused scrape:
-
-```bash
+# 3. Run a scrape
 uv run python scrape.py --profile profile.json --hours 24
-```
 
-5. Send digest email:
-
-```bash
-uv run python email_digest.py
+# 4. Send email digest
+GMAIL_USER=you@gmail.com GMAIL_APP_PASSWORD=xxxx EMAIL_TO=you@gmail.com \
+  uv run python email_digest.py
 ```
 
 ## Daily Automation (GitHub Actions)
 
-1. Fork the repo
-2. Add your `profile.json` to your fork (private fork recommended). Because `profile.json` is gitignored, use:
-
-```bash
-git add -f profile.json
-```
-
-3. Add repository secrets:
-- `GMAIL_USER`
-- `GMAIL_APP_PASSWORD`
-- `EMAIL_TO`
-
+1. Fork this repo (or use the web app's automated setup)
+2. Add `profile.json` to your fork:
+   ```bash
+   git add -f profile.json && git commit -m "Add profile" && git push
+   ```
+3. Add repository secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `EMAIL_TO`
 4. Enable Actions and uncomment the cron line in `.github/workflows/daily-jobs.yml`
-5. Done: the unified workflow runs daily and sends emails
+5. Done — the workflow runs daily and emails you ranked job matches
 
-## Web App (Full Experience)
+### Gmail App Password
 
-1. Deploy `web/` (Vercel) + Postgres (Neon)
-2. Upload PDF resume in the web app, let AI parse to profile JSON
-3. Customize scoring and subscribe for daily digests (7/14/30 days)
-4. GitHub Actions runs daily and calls the web cron API for web subscriptions
+Go to [Google Account > App Passwords](https://myaccount.google.com/apppasswords), generate one for "Mail", and use it as `GMAIL_APP_PASSWORD`.
 
-For web mode in Actions, add these secrets:
-- `APP_URL`
-- `CRON_SECRET`
+## Job Boards
 
-Then run `Daily Jobs` manually with `mode=web`.
+| Board | Method |
+|-------|--------|
+| Indeed | HTTP scraping |
+| Seek | Browser automation (nodriver) |
+| Prosple | GraphQL API |
+| GradConnection | HTTP scraping |
+| LinkedIn | HTTP scraping |
 
-## Unified Architecture
+## Scoring
+
+Jobs are scored on 8 weighted dimensions:
+
+| Category | Base Points | What It Measures |
+|----------|------------|-----------------|
+| Skills Match | 55 | Core/strong/peripheral skill matches + adjacency |
+| Location | 20 | Preferred cities + remote bonus |
+| Title Match | 18 | Job title vs. your professional identity |
+| Culture | 15 | Remote-first, equity, flex hours, learning budget |
+| Company Tier | 12 | Big Tech, AU Notable, Top Tech companies |
+| Sponsorship | 12 | Visa sponsorship signals |
+| Job Quality | 12 | Salary transparency, detailed descriptions |
+| Recency | 10 | Newer postings score higher |
+
+All weights are configurable in `profile.json` (0x = off, 1x = default, 2x = double).
+
+## Project Structure
 
 ```text
-Web App (Vercel)                    GitHub Actions (User's Fork)
-┌───────────────────┐               ┌──────────────────────────┐
-│ Upload resume     │               │ daily-jobs.yml           │
-│ AI parses → JSON  │               │                          │
-│ Customize scoring │               │ Mode: cli                │
-│ Select days (7/14/30)            │   1. Read profile.json   │
-│ → First email sent │              │   2. Run scrape.py       │
-│   immediately     │               │   3. Score & email       │
-│                   │               │                          │
-│ Export profile.json│──(commit)──→ │ Mode: web                │
-│                   │               │   1. Call /api/cron/...  │
-└───────────────────┘               └──────────────────────────┘
+profile.example.json        Starter profile template
+scrape.py                   Orchestration + scoring engine
+scrapers_au.py              Job board scrapers (5 sources)
+email_digest.py             HTML email rendering + SMTP
+web/                        Next.js app (local profile builder)
+  src/app/                  Single-page wizard UI
+  src/app/api/              Resume parsing + GitHub setup APIs
+  src/server/lib/           Resume parser (Gemini AI)
+.github/workflows/          CI + daily jobs automation
 ```
 
 ## Environment Variables
 
-Root `.env` (CLI email):
-- `GMAIL_USER`
-- `GMAIL_APP_PASSWORD`
-- `EMAIL_TO`
+**Web app** (`web/.env`):
+- `GEMINI_API_KEY` — Google AI API key for resume parsing
+- `NEXT_PUBLIC_GITHUB_CLIENT_ID` — OAuth app client ID (optional, for automated setup)
 
-`web/.env`:
-- `DATABASE_URL`
-- `GEMINI_API_KEY`
-- `CRON_SECRET`
-- Optional legacy worker vars (commented in example)
+**GitHub Actions secrets** (or CLI `.env`):
+- `GMAIL_USER` — Gmail address
+- `GMAIL_APP_PASSWORD` — Gmail app password
+- `EMAIL_TO` — Comma-separated recipient emails
 
 ## Contributing
 

@@ -10,7 +10,6 @@ Thanks for contributing. This guide covers local setup, project structure, and s
 - Node.js 18+
 - [uv](https://docs.astral.sh/uv/)
 - npm
-- PostgreSQL database (Neon works well)
 - Gemini API key (for web resume parsing)
 
 ### Clone and Install
@@ -29,45 +28,39 @@ cd web && npm install
 ### Environment Variables
 
 ```bash
-# Root .env (CLI email)
+# Root .env (CLI email — optional for local dev)
 cp .env.example .env
 
 # Web .env
 cp web/.env.example web/.env
+# Add your GEMINI_API_KEY
 ```
 
 ### Run Locally
 
 ```bash
-# Terminal 1: web app
+# Terminal 1: web app (localhost:3006)
 cd web && npm run dev
 
 # Terminal 2: run CLI scrape when needed
-cd /path/to/job-hunter
 uv run python scrape.py --profile profile.json --hours 24
 uv run python email_digest.py
 ```
 
-### Database Setup
-
-```bash
-cd web
-npx prisma db push
-npx prisma generate
-```
+No database setup required — the web app runs entirely locally.
 
 ## Project Structure
 
 ```text
-profile.example.json  — Starter profile template for CLI mode
-scrape.py             — CLI orchestration + scoring engine
-scrapers_au.py        — Job board scrapers
+profile.example.json  — Starter profile template
+scrape.py             — Orchestration + scoring engine
+scrapers_au.py        — Job board scrapers (5 sources)
 email_digest.py       — HTML email rendering + SMTP sender
-web/                  — Next.js app (tRPC + Prisma + Tailwind)
-  prisma/schema.prisma  — Database schema
-  src/server/api/       — API routers
-  src/app/              — App routes/pages
-.github/workflows/    — CI + unified daily jobs automation
+web/                  — Next.js app (local profile builder)
+  src/app/page.tsx    — Single-page wizard UI
+  src/app/api/        — Resume parsing + GitHub setup APIs
+  src/server/lib/     — Resume parser (Gemini AI)
+.github/workflows/    — CI + daily jobs automation
 ```
 
 ## How to Add a New Scraper
@@ -118,7 +111,7 @@ To add a new scoring signal:
 ## Code Style
 
 - Python: `ruff format` and `ruff check`
-- TypeScript: ESLint/Prettier in `web/`
+- TypeScript: `tsc --noEmit` in `web/`
 
 ```bash
 # Python

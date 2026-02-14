@@ -42,9 +42,6 @@ jobs:
       - name: Install dependencies
         run: cd web && npm ci
 
-      - name: Generate Prisma client
-        run: cd web && npx prisma generate
-
       - name: TypeScript typecheck
         run: cd web && npm run typecheck
         env:
@@ -63,9 +60,6 @@ jobs:
 
       - name: Install dependencies
         run: cd web && npm ci
-
-      - name: Generate Prisma client
-        run: cd web && npx prisma generate
 
       - name: Build
         run: cd web && npm run build
