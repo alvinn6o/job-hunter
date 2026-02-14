@@ -1,0 +1,125 @@
+name: Daily Jobs
+
+on:
+  # schedule:
+  #   - cron: '0 21 * * *'  # Uncomment after setup (9pm UTC = 7am AEST)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: false
+        default: 'cli'
+        type: choice
+        options:
+          - cli
+          - web
+      full_run:
+        description: 'Run full search matrix (all locations x all roles)'
+        required: false
+        default: 'false'
+        type: boolean
+      hours:
+        description: 'Max hours since posted'
+        required: false
+        default: '24'
+        type: string
+      min_score:
+        description: 'Minimum score for email digest'
+        required: false
+        default: '20'
+        type: string
+
+concurrency:
+  group: daily-jobs
+  cancel-in-progress: false
+
+jobs:
+  cli:
+    if: ${{ inputs.mode != 'web' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Install Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Ensure profile.json exists
+        run: |
+          if [ ! -f profile.json ]; then
+            echo "profile.json not found. Copying profile.example.json -> profile.json"
+            cp profile.example.json profile.json
+          fi
+
+      - name: Run scraper (focused)
+        if: ${{ !(inputs.full_run == true || inputs.full_run == 'true') }}
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            uv run python scrape.py --profile profile.json --hours "${{ inputs.hours || '24' }}" --results 20
+
+      - name: Run scraper (full)
+        if: ${{ inputs.full_run == true || inputs.full_run == 'true' }}
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            uv run python scrape.py --profile profile.json --hours 48
+
+      - name: Send email digest
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: uv run python email_digest.py --min-score "${{ inputs.min_score || '20' }}"
+
+      - name: Upload jobs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jobs
+          path: jobs/
+          retention-days: 7
+
+  web:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'web' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Validate required secrets
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::APP_URL and CRON_SECRET must be set as repository secrets."
+            exit 1
+          fi
+
+      - name: Trigger web daily digest
+        run: |
+          response_file=$(mktemp)
+          http_code=$(curl -sS -o "$response_file" -w "%{http_code}" -X POST \
+            "$APP_URL/api/cron/daily-digest" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json")
+
+          echo "HTTP $http_code"
+          cat "$response_file"
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Cron endpoint returned HTTP $http_code"
+            exit 1
+          fi
