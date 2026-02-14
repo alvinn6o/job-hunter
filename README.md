@@ -6,7 +6,7 @@ Automated job discovery for Australia. Upload your resume, AI parses your skills
 
 ## Demo
 
-https://github.com/elvistranhere/job-hunter-assets/releases/download/v1.0/demo.mp4
+<video src="demo.mp4" width="100%" autoplay loop muted playsinline></video>
 
 ## Screenshots
 
