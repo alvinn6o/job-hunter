@@ -24,88 +24,87 @@ Automated job discovery for Australia. Upload your resume, AI parses your skills
 
 ## How It Works
 
-```text
-Resume PDF                     GitHub Actions (your fork)
-    |                          +--------------------------+
-    v                          |  daily-jobs.yml (cron)   |
- Web App (local)               |                          |
- npm run dev                   |  1. Read profile.json    |
-    |                          |  2. Scrape 5 job boards  |
-    +--> profile.json --+--->  |  3. Score & rank jobs    |
-                        |      |  4. Email digest          |
-                        |      +--------------------------+
-                        |
-                        +---> Or run locally:
-                              uv run python scrape.py
+```mermaid
+flowchart LR
+    A[Clone repo] --> B[Run wizard]
+    B --> C[Connect GitHub]
+    C --> D[All automatic]
+    D --> E[Daily emails]
+
+    style D fill:#065f46,stroke:#059669,color:#fff
+    style E fill:#92400e,stroke:#d97706,color:#fff
 ```
+
+> **You** — clone, configure, connect. **The app** — forks, commits profile, sets secrets, enables cron. **Every day** — scrapes 5 boards, scores jobs, emails you.
 
 ## Quick Start
 
-### Option A: Web App (recommended)
+> **Do not fork this repo first.** Clone it, run the wizard, and the app will fork and configure everything for you.
 
-The web app parses your resume with AI and lets you customize scoring weights.
+### 1. Clone and run the wizard
 
 ```bash
-cd web
-cp .env.example .env        # Add your GEMINI_API_KEY
+git clone https://github.com/elvistranhere/job-hunter.git
+cd job-hunter/web
+cp .env.example .env        # Add your GEMINI_API_KEY (optional — you can skip AI)
 npm install
 npm run dev                  # Opens on localhost:3006
 ```
 
-1. Upload your resume PDF
-2. Review and customize skill tiers, scoring weights, locations, and roles
-3. Download `profile.json`
-4. Follow the "Set Up Automation" guide to fork, add secrets, and enable daily cron
+### 2. Configure your profile
 
-### Option B: CLI Only
+1. Upload your resume PDF (or click "Continue without AI" to set up manually)
+2. Customize skill tiers, scoring weights, locations, and roles
+3. Adjust search settings (max hours, results per search, seniority filters)
+
+### 3. Connect GitHub and deploy
+
+On the automation page, click **Connect GitHub** and authorize. The app will automatically:
+
+- Fork this repo to your account
+- Commit your `profile.json` to the repo root
+- Set Gmail secrets (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `EMAIL_TO`)
+- Enable the daily cron workflow and trigger the first run
+
+You'll receive an email with ranked job results within ~15 minutes. After that, the cron runs daily at 9pm UTC (7am AEST).
+
+> **Gmail App Password**: You'll need one for the email digest. Go to [Google Account > App Passwords](https://myaccount.google.com/apppasswords), generate one for "Mail", and enter it during setup. Requires 2-Step Verification.
+
+<details>
+<summary><strong>Alternative: CLI or manual setup</strong></summary>
+
+### CLI Only (no web app)
 
 ```bash
-# 1. Create your profile
-cp profile.example.json profile.json
-# Edit profile.json with your skills, locations, roles, and weights
-
-# 2. Install Python dependencies
+cp profile.example.json profile.json   # Edit with your skills, locations, roles
 uv sync
-
-# 3. Run a scrape
 uv run python scrape.py --profile profile.json
-
-# 4. Send email digest
 GMAIL_USER=you@gmail.com GMAIL_APP_PASSWORD=xxxx EMAIL_TO=you@gmail.com \
   uv run python email_digest.py --profile profile.json
 ```
 
-## Daily Automation (GitHub Actions)
+### Manual GitHub Actions (without OAuth)
 
-1. **Fork this repo** — click [Fork](https://github.com/elvistranhere/job-hunter/fork) on GitHub
-2. **Add your `profile.json`** (generated from the web app or copied from `profile.example.json`):
+1. **Fork this repo** — click [Fork](https://github.com/elvistranhere/job-hunter/fork)
+2. **Commit `profile.json`** to the repo root:
    ```bash
    git add -f profile.json && git commit -m "Add my profile" && git push
    ```
-3. **Set repository secrets** — go to your fork's **Settings > Secrets and variables > Actions** and add:
+3. **Set repository secrets** in **Settings > Secrets and variables > Actions**:
    | Secret | Value |
    |--------|-------|
    | `GMAIL_USER` | Your Gmail address |
    | `GMAIL_APP_PASSWORD` | [Gmail App Password](https://myaccount.google.com/apppasswords) (16-character) |
    | `EMAIL_TO` | Comma-separated recipient emails |
-4. **Enable Actions** — go to your fork's **Actions** tab, click "I understand my workflows, go ahead and enable them"
-5. **Uncomment the cron schedule** — edit `.github/workflows/daily-jobs.yml` and change:
-   ```yaml
-   # schedule:
-   #   - cron: '0 21 * * *'
-   ```
-   to:
+4. **Enable Actions** — click "I understand my workflows, go ahead and enable them"
+5. **Uncomment the cron** in `.github/workflows/daily-jobs.yml`:
    ```yaml
    schedule:
      - cron: '0 21 * * *'   # 9pm UTC = 7am AEST
    ```
-6. **Trigger the first run** — go to **Actions > Daily Jobs > Run workflow**
+6. **Run workflow** — **Actions > Daily Jobs > Run workflow**
 
-You'll receive an email with ranked job results within ~15 minutes. After that, the cron runs daily.
-
-### Gmail App Password
-
-Go to [Google Account > App Passwords](https://myaccount.google.com/apppasswords), generate one for "Mail", and use it as `GMAIL_APP_PASSWORD`. You need 2-Step Verification enabled on your Google account first.
+</details>
 
 ## Job Boards
 
@@ -119,7 +118,7 @@ Go to [Google Account > App Passwords](https://myaccount.google.com/apppasswords
 
 ## Scoring
 
-Jobs are scored on 8 weighted dimensions:
+Jobs are scored on 8 weighted dimensions (all configurable in `profile.json`):
 
 | Category | Base Points | What It Measures |
 |----------|------------|-----------------|
@@ -132,24 +131,22 @@ Jobs are scored on 8 weighted dimensions:
 | Job Quality | 12 | Salary transparency, detailed descriptions |
 | Recency | 10 | Newer postings score higher |
 
-All weights are configurable in `profile.json` (0x = off, 1x = default, 2x = double).
-
 ### profile.json Reference
 
-`profile.json` is the single source of truth for the pipeline. The web app generates it; CLI flags are optional overrides.
+The web app generates this file; CLI flags are optional overrides.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `skills` | array | — | Skills with tiers: `core`, `strong`, `peripheral` |
-| `titles` | string[] | — | Your professional titles (for title matching) |
-| `keywords` | string[] | — | Search terms used across job boards |
+| `titles` | string[] | — | Professional titles for title matching |
+| `keywords` | string[] | — | Search terms for job boards |
 | `locations` | string[] | — | Australian cities to search |
 | `roles` | string[] | — | Role titles to search for |
-| `weights` | object | all `1.0` | Scoring category multipliers (0x = off, 2x = double) |
-| `maxHours` | number | `24` | Max hours since job was posted |
-| `resultsPerSearch` | number | `20` | Results per search query per site |
-| `excludeSeniority` | string[] | `["senior","lead","staff","director","executive"]` | Seniority levels to filter out |
-| `minScore` | number | `20` | Minimum score for email digest inclusion |
+| `weights` | object | all `1.0` | Scoring multipliers (0 = off, 2 = double) |
+| `maxHours` | number | `24` | Max hours since posted |
+| `resultsPerSearch` | number | `20` | Results per search per site |
+| `excludeSeniority` | string[] | `["senior","lead",...]` | Seniority levels to filter out |
+| `minScore` | number | `20` | Minimum score for email digest |
 
 ## Project Structure
 
@@ -158,20 +155,17 @@ profile.example.json        Starter profile template
 scrape.py                   Orchestration + scoring engine
 scrapers_au.py              Job board scrapers (5 sources)
 email_digest.py             HTML email rendering + SMTP
-web/                        Next.js app (local profile builder)
-  src/app/                  Single-page wizard UI
-  src/app/api/              Resume parsing + GitHub setup APIs
-  src/server/lib/           Resume parser (Gemini AI)
-.github/workflows/          CI + daily jobs automation
+web/                        Next.js app (profile wizard)
+.github/workflows/          CI + daily automation
 ```
 
 ## Environment Variables
 
 **Web app** (`web/.env`):
-- `GEMINI_API_KEY` — Google AI API key for resume parsing
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID` — OAuth app client ID (optional, for automated setup)
+- `GEMINI_API_KEY` — Google AI key for resume parsing (optional — you can skip AI)
+- `NEXT_PUBLIC_GITHUB_CLIENT_ID` — OAuth client ID for automated setup. A default is included in `.env.example`; the app handles the rest
 
-**GitHub Actions secrets** (or CLI `.env`):
+**GitHub Actions secrets**:
 - `GMAIL_USER` — Gmail address
 - `GMAIL_APP_PASSWORD` — Gmail app password
 - `EMAIL_TO` — Comma-separated recipient emails
