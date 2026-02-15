@@ -10,6 +10,7 @@ interface Skill {
 interface SkillTierEditorProps {
   skills: Skill[];
   onUpdateTier: (skillName: string, newTier: SkillTier) => void;
+  onRemoveSkill?: (skillName: string) => void;
 }
 
 const TIER_CONFIG = {
@@ -33,7 +34,7 @@ const TIER_CONFIG = {
   },
 } as const;
 
-export function SkillTierEditor({ skills, onUpdateTier }: SkillTierEditorProps) {
+export function SkillTierEditor({ skills, onUpdateTier, onRemoveSkill }: SkillTierEditorProps) {
   const skillsByTier = {
     core: skills.filter((s) => s.tier === "core"),
     strong: skills.filter((s) => s.tier === "strong"),
@@ -76,6 +77,7 @@ export function SkillTierEditor({ skills, onUpdateTier }: SkillTierEditorProps) 
                     skill={skill}
                     tierConfig={config}
                     onTierChange={(newTier) => onUpdateTier(skill.name, newTier)}
+                    onRemove={onRemoveSkill ? () => onRemoveSkill(skill.name) : undefined}
                   />
                 ))}
               </div>
@@ -91,19 +93,21 @@ function SkillPill({
   skill,
   tierConfig,
   onTierChange,
+  onRemove,
 }: {
   skill: Skill;
   tierConfig: (typeof TIER_CONFIG)[keyof typeof TIER_CONFIG];
   onTierChange: (tier: SkillTier) => void;
+  onRemove?: () => void;
 }) {
   return (
-    <div className="group relative">
+    <div className="group relative flex items-center">
       <select
         value={skill.tier}
         onChange={(e) => onTierChange(e.target.value as SkillTier)}
         className={`
           appearance-none cursor-pointer
-          px-3 py-1.5 pr-7 rounded-full border text-sm font-medium
+          px-3 py-1.5 ${onRemove ? "pr-7" : "pr-7"} rounded-full border text-sm font-medium
           transition-all duration-200
           hover:brightness-110 focus:outline-none focus:ring-1 focus:ring-amber-500/40
           ${tierConfig.color}
@@ -116,6 +120,7 @@ function SkillPill({
       <svg
         className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-current opacity-50 pointer-events-none"
         viewBox="0 0 16 16"
+        style={onRemove ? { right: "1.75rem" } : undefined}
       >
         <path
           d="M4 6l4 4 4-4"
@@ -125,6 +130,18 @@ function SkillPill({
           strokeLinecap="round"
         />
       </svg>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ml-1 p-1 rounded-full hover:bg-rose-500/20 transition-colors"
+          title="Remove skill"
+        >
+          <svg className="w-3.5 h-3.5 text-navy-400 hover:text-rose-400" viewBox="0 0 16 16">
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

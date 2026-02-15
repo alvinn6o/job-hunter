@@ -18,9 +18,9 @@ Automated job discovery for Australia. Upload your resume, AI parses your skills
 |:-:|:-:|
 | ![Scoring Weights](https://raw.githubusercontent.com/elvistranhere/job-hunter-assets/main/03-scoring-weights.png) | ![Export JSON](https://raw.githubusercontent.com/elvistranhere/job-hunter-assets/main/04-export-json.png) |
 
-| GitHub Automation |
-|:-:|
-| ![GitHub Automation](https://raw.githubusercontent.com/elvistranhere/job-hunter-assets/main/05-github-automation.png) |
+| GitHub Automation | Email Digest |
+|:-:|:-:|
+| ![GitHub Automation](https://raw.githubusercontent.com/elvistranhere/job-hunter-assets/main/05-github-automation.png) | ![Email Digest](https://raw.githubusercontent.com/elvistranhere/job-hunter-assets/main/06-email-digest.png) |
 
 ## How It Works
 

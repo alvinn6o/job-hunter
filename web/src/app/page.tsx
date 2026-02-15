@@ -183,9 +183,8 @@ function ProgressDot({ status }: { status: ProgressStatus }) {
 function StepIndicator({ step }: { step: WizardStep }) {
   const items: { id: WizardStep; label: string }[] = [
     { id: 1, label: "Upload" },
-    { id: 2, label: "Edit" },
-    { id: 3, label: "Export" },
-    { id: 4, label: "Automate" },
+    { id: 2, label: "Configure" },
+    { id: 3, label: "Automate" },
   ];
 
   return (
@@ -229,6 +228,7 @@ export default function Home() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [minScore, setMinScore] = useState(20);
 
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
 
@@ -276,8 +276,9 @@ export default function Home() {
       locations: selectedLocations,
       roles: selectedRoles,
       weights,
+      minScore,
     };
-  }, [profile, selectedLocations, selectedRoles, skills, weights]);
+  }, [profile, selectedLocations, selectedRoles, skills, weights, minScore]);
 
   const profileJson = useMemo(() => {
     if (!exportedProfile) {
@@ -287,32 +288,55 @@ export default function Home() {
     return JSON.stringify(exportedProfile, null, 2);
   }, [exportedProfile]);
 
-  const handleParsed = (parsedProfile: ParsedProfile) => {
-    setProfile(parsedProfile);
-    setSkills(parsedProfile.skills);
-    setWeights(DEFAULT_WEIGHTS);
-    setSelectedLocations(parsedProfile.suggestedLocations ?? []);
-    setSelectedRoles(parsedProfile.suggestedRoles ?? []);
-
-    setStep(2);
+  const resetWizardState = () => {
     setCopyState("idle");
-
     setDeviceCode(null);
     setGithubToken(null);
     setPollingIntervalSeconds(5);
     setIsRequestingDeviceCode(false);
     setIsPollingToken(false);
     setConnectError(null);
-
     setGmailUser("");
     setGmailAppPassword("");
     setEmailTo("");
-
     setIsDeploying(false);
     setDeployError(null);
     setDeployResult(null);
     setDeployTaskStatus(createPendingDeployState());
   };
+
+  const handleParsed = (parsedProfile: ParsedProfile) => {
+    setProfile(parsedProfile);
+    setSkills(parsedProfile.skills);
+    setWeights(DEFAULT_WEIGHTS);
+    setSelectedLocations(parsedProfile.suggestedLocations ?? []);
+    setSelectedRoles(parsedProfile.suggestedRoles ?? []);
+    setStep(2);
+    resetWizardState();
+  };
+
+  const handleSkipAi = () => {
+    const blankProfile: ParsedProfile = {
+      rawText: "",
+      skills: [],
+      titles: [],
+      keywords: [],
+      experience: null,
+      suggestedLocations: ["Adelaide", "Sydney", "Melbourne"],
+      suggestedRoles: ["Software Engineer", "Full Stack Developer", "Frontend Developer"],
+      aiResponse: "",
+    };
+    setProfile(blankProfile);
+    setSkills([]);
+    setWeights(DEFAULT_WEIGHTS);
+    setSelectedLocations(blankProfile.suggestedLocations);
+    setSelectedRoles(blankProfile.suggestedRoles);
+    setStep(2);
+    resetWizardState();
+  };
+
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillTier, setNewSkillTier] = useState<SkillTier>("core");
 
   const updateSkillTier = (skillName: string, newTier: SkillTier) => {
     setSkills((prev) =>
@@ -320,6 +344,18 @@ export default function Home() {
         skill.name === skillName ? { ...skill, tier: newTier } : skill,
       ),
     );
+  };
+
+  const addSkill = () => {
+    const name = newSkillName.trim();
+    if (!name) return;
+    if (skills.some((s) => s.name.toLowerCase() === name.toLowerCase())) return;
+    setSkills((prev) => [...prev, { name, tier: newSkillTier }]);
+    setNewSkillName("");
+  };
+
+  const removeSkill = (skillName: string) => {
+    setSkills((prev) => prev.filter((s) => s.name !== skillName));
   };
 
   useEffect(() => {
@@ -625,8 +661,26 @@ export default function Home() {
           </section>
 
           {/* Upload form section */}
-          <section className="relative z-10 mx-auto max-w-3xl px-6 pb-20">
+          <section className="relative z-10 mx-auto max-w-3xl px-6 pb-6">
             <UploadForm onParsed={handleParsed} />
+          </section>
+
+          <section className="relative z-10 mx-auto max-w-2xl px-6 pb-20 text-center">
+            <div className="flex items-center gap-4 mb-5">
+              <div className="h-px flex-1 bg-navy-700" />
+              <span className="font-sans text-xs text-navy-500 uppercase tracking-wider">or</span>
+              <div className="h-px flex-1 bg-navy-700" />
+            </div>
+            <button
+              type="button"
+              onClick={handleSkipAi}
+              className="rounded-xl border border-navy-600 bg-navy-800/60 px-6 py-3 font-sans text-sm font-semibold text-navy-200 hover:border-navy-500 hover:bg-navy-800 transition-colors"
+            >
+              Continue without AI
+            </button>
+            <p className="mt-2 font-sans text-xs text-navy-500">
+              Skip resume parsing and manually configure your profile
+            </p>
           </section>
 
           {/* How it works */}
@@ -716,12 +770,12 @@ export default function Home() {
         <section className="relative z-10 mx-auto max-w-4xl px-6 py-10">
           <div className="mb-10">
             <h1 className="font-serif text-3xl text-white mb-3 md:text-4xl">
-              Your <span className="text-amber-400">profile</span> is ready
+              Configure your <span className="text-amber-400">profile</span>
             </h1>
             <p className="font-sans text-base text-navy-300 max-w-2xl leading-relaxed">
-              AI extracted your skills and experience. Review the tiers below, adjust scoring
-              weights to match what matters to you, then hit &ldquo;Find My Jobs&rdquo; to start
-              searching.
+              {skills.length > 0
+                ? "Review your skills and experience. Adjust tiers, scoring weights, and preferences, then export or set up automation."
+                : "Add your skills, set scoring weights and preferences, then export or set up daily automation."}
             </p>
           </div>
 
@@ -764,11 +818,43 @@ export default function Home() {
             <div className="mb-4">
               <h2 className="font-serif text-xl text-white mb-1">Skill Tiers</h2>
               <p className="font-sans text-sm text-navy-400">
-                Change the dropdown on any skill to reclassify it. Core skills get the most
-                weight when scoring jobs.
+                {skills.length > 0
+                  ? "Change the dropdown on any skill to reclassify it. Core skills get the most weight when scoring jobs."
+                  : "Add your skills below. Core skills get the most weight when scoring jobs."}
               </p>
             </div>
-            <SkillTierEditor skills={skills} onUpdateTier={updateSkillTier} />
+            <SkillTierEditor skills={skills} onUpdateTier={updateSkillTier} onRemoveSkill={removeSkill} />
+            <div className="mt-4 flex gap-2">
+              <input
+                type="text"
+                value={newSkillName}
+                onChange={(e) => setNewSkillName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }}
+                placeholder="Add a skill (e.g. React, Python, AWS)"
+                className="flex-1 rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-2.5 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
+              />
+              <select
+                value={newSkillTier}
+                onChange={(e) => setNewSkillTier(e.target.value as SkillTier)}
+                className="rounded-xl border border-navy-600 bg-navy-900/70 px-3 py-2.5 font-sans text-sm text-white focus:outline-none focus:border-amber-500/60"
+              >
+                <option value="core">Core</option>
+                <option value="strong">Strong</option>
+                <option value="peripheral">Peripheral</option>
+              </select>
+              <button
+                type="button"
+                onClick={addSkill}
+                disabled={!newSkillName.trim()}
+                className={`rounded-xl px-4 py-2.5 font-sans text-sm font-semibold transition-colors ${
+                  newSkillName.trim()
+                    ? "bg-amber-500 text-navy-950 hover:bg-amber-400"
+                    : "bg-navy-700 text-navy-400 cursor-not-allowed"
+                }`}
+              >
+                Add
+              </button>
+            </div>
           </section>
 
           <section className="mb-10">
@@ -786,9 +872,37 @@ export default function Home() {
 
           <section className="mb-10">
             <div className="mb-4">
+              <h2 className="font-serif text-xl text-white mb-1">Email Cutoff Score</h2>
+              <p className="font-sans text-sm text-navy-400">
+                Only jobs scoring at or above this threshold will appear in your daily email digest.
+              </p>
+            </div>
+            <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-6">
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min={0}
+                  max={80}
+                  step={5}
+                  value={minScore}
+                  onChange={(e) => setMinScore(Number(e.target.value))}
+                  className="flex-1 accent-amber-500"
+                />
+                <span className="font-mono text-lg font-semibold text-white w-12 text-right">
+                  {minScore}
+                </span>
+              </div>
+              <p className="mt-2 font-sans text-xs text-navy-500">
+                Default: 20. Lower = more jobs in digest, higher = only top matches.
+              </p>
+            </div>
+          </section>
+
+          <section className="mb-10">
+            <div className="mb-4">
               <h2 className="font-serif text-xl text-white mb-1">Preferences</h2>
               <p className="font-sans text-sm text-navy-400">
-                AI-suggested from your resume. Toggle or add your own.
+                {skills.length > 0 ? "AI-suggested from your resume. Toggle or add your own." : "Select your preferred locations and job roles."}
               </p>
             </div>
             <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-6">
@@ -800,6 +914,41 @@ export default function Home() {
                 onLocationsChange={setSelectedLocations}
                 onRolesChange={setSelectedRoles}
               />
+            </div>
+          </section>
+
+          <section className="mb-10">
+            <div className="mb-4">
+              <h2 className="font-serif text-xl text-white mb-1">Export profile.json</h2>
+              <p className="font-sans text-sm text-navy-400">
+                This file drives the scraper. Download it or continue to set up daily automation.
+              </p>
+            </div>
+            <div className="rounded-xl border border-navy-700 bg-navy-800/40 p-6">
+              <pre className="max-h-[320px] overflow-auto rounded-xl border border-navy-700 bg-navy-950/70 p-4 text-xs text-navy-100 font-mono leading-relaxed mb-4">
+                {profileJson}
+              </pre>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={downloadProfileJson}
+                  className="rounded-xl bg-amber-500 px-5 py-2.5 font-sans text-sm font-semibold text-navy-950 hover:bg-amber-400 transition-colors"
+                >
+                  Download profile.json
+                </button>
+                <button
+                  type="button"
+                  onClick={copyProfileJson}
+                  className="rounded-xl border border-navy-600 bg-navy-800/60 px-5 py-2.5 font-sans text-sm font-semibold text-navy-200 hover:border-navy-500 transition-colors"
+                >
+                  {copyState === "copied" ? "Copied" : "Copy to clipboard"}
+                </button>
+              </div>
+              {copyState === "error" && (
+                <p className="mt-3 font-sans text-sm text-rose-400">
+                  Could not copy to clipboard. Please copy manually from the preview.
+                </p>
+              )}
             </div>
           </section>
 
@@ -816,73 +965,13 @@ export default function Home() {
               onClick={() => setStep(3)}
               className="rounded-xl bg-amber-500 px-6 py-3 font-sans text-sm font-semibold text-navy-950 hover:bg-amber-400 transition-colors"
             >
-              Continue to Export
+              Set Up Daily Automation
             </button>
           </div>
         </section>
       )}
 
       {step === 3 && profile && (
-        <section className="relative z-10 mx-auto max-w-4xl px-6 py-10">
-          <div className="mb-8">
-            <h1 className="font-serif text-3xl text-white mb-2 md:text-4xl">
-              Export your <span className="text-amber-400">profile.json</span>
-            </h1>
-            <p className="font-sans text-navy-300 max-w-2xl">
-              This file drives the scraper. It includes your skill tiers, location and role
-              preferences, and scoring weights.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6 mb-6">
-            <p className="font-sans text-xs uppercase tracking-wide text-navy-400 mb-3">
-              profile.json preview
-            </p>
-            <pre className="max-h-[520px] overflow-auto rounded-xl border border-navy-700 bg-navy-950/70 p-4 text-xs text-navy-100 font-mono leading-relaxed">
-              {profileJson}
-            </pre>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <button
-              type="button"
-              onClick={downloadProfileJson}
-              className="rounded-xl bg-amber-500 px-6 py-3 font-sans text-sm font-semibold text-navy-950 hover:bg-amber-400 transition-colors"
-            >
-              Download profile.json
-            </button>
-            <button
-              type="button"
-              onClick={copyProfileJson}
-              className="rounded-xl border border-navy-600 bg-navy-800/60 px-6 py-3 font-sans text-sm font-semibold text-navy-200 hover:border-navy-500 transition-colors"
-            >
-              {copyState === "copied" ? "Copied" : "Copy to clipboard"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="rounded-xl border border-navy-600 bg-navy-800/60 px-6 py-3 font-sans text-sm font-semibold text-navy-200 hover:border-navy-500 transition-colors"
-            >
-              Back to Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep(4)}
-              className="rounded-xl border border-amber-500/50 bg-amber-500/10 px-6 py-3 font-sans text-sm font-semibold text-amber-300 hover:bg-amber-500/20 transition-colors"
-            >
-              Set Up Daily Automation
-            </button>
-          </div>
-
-          {copyState === "error" && (
-            <p className="mt-3 font-sans text-sm text-rose-400">
-              Could not copy to clipboard. Please copy manually from the preview.
-            </p>
-          )}
-        </section>
-      )}
-
-      {step === 4 && profile && (
         <section className="relative z-10 mx-auto max-w-4xl px-6 py-10">
           <div className="mb-8">
             <h1 className="font-serif text-3xl text-white mb-2 md:text-4xl">

@@ -315,7 +315,7 @@ def render_email_html(df: pd.DataFrame, min_score: float = 20.0) -> str:
 </td></tr>""")
 
     # Stats bar — 4 metric cards
-    sites_summary = " · ".join(f"{s} ({c})" for s, c in list(sites.items())[:4])
+    sites_summary = " · ".join(f"{s} ({c})" for s, c in sites.items())
     parts.append(f"""<tr><td style="padding:0 20px 16px;">
   <table role="presentation" style="width:100%;border-collapse:separate;border-spacing:8px 0;">
     <tr>
