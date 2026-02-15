@@ -248,6 +248,9 @@ export default function Home() {
   const [gmailUser, setGmailUser] = useState("");
   const [gmailAppPassword, setGmailAppPassword] = useState("");
   const [emailTo, setEmailTo] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -515,11 +518,53 @@ export default function Home() {
     .map((item) => item.trim())
     .filter(Boolean);
 
-  const emailConfigValid =
+  const emailFieldsReady =
     emailRegex.test(gmailUser.trim()) &&
     gmailAppPassword.trim().length > 0 &&
     recipients.length > 0 &&
     recipients.every((recipient) => emailRegex.test(recipient));
+
+  const handleVerifyEmail = async () => {
+    setIsVerifyingEmail(true);
+    setVerifyError(null);
+    try {
+      const res = await fetch("/api/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gmailUser: gmailUser.trim(),
+          gmailAppPassword: gmailAppPassword.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEmailVerified(true);
+      } else {
+        setVerifyError(data.error || "Verification failed");
+      }
+    } catch {
+      setVerifyError("Could not reach verification server");
+    } finally {
+      setIsVerifyingEmail(false);
+    }
+  };
+
+  // Reset verification when any email field changes
+  const updateGmailUser = (value: string) => {
+    setGmailUser(value);
+    setEmailVerified(false);
+    setVerifyError(null);
+  };
+  const updateGmailAppPassword = (value: string) => {
+    setGmailAppPassword(value);
+    setEmailVerified(false);
+    setVerifyError(null);
+  };
+  const updateEmailTo = (value: string) => {
+    setEmailTo(value);
+    setEmailVerified(false);
+    setVerifyError(null);
+  };
 
   const connectStatus: ProgressStatus = githubToken
     ? "complete"
@@ -527,7 +572,7 @@ export default function Home() {
       ? "in-progress"
       : "pending";
 
-  const configureStatus: ProgressStatus = emailConfigValid
+  const configureStatus: ProgressStatus = emailVerified
     ? "complete"
     : gmailUser || gmailAppPassword || emailTo
       ? "in-progress"
@@ -540,7 +585,7 @@ export default function Home() {
       : "pending";
 
   const handleDeploy = async () => {
-    if (!githubToken || !profileJson || !emailConfigValid) {
+    if (!githubToken || !profileJson || !emailVerified || !emailFieldsReady) {
       return;
     }
 
@@ -1158,7 +1203,7 @@ export default function Home() {
                       <input
                         type="email"
                         value={gmailUser}
-                        onChange={(event) => setGmailUser(event.target.value)}
+                        onChange={(event) => updateGmailUser(event.target.value)}
                         placeholder="you@gmail.com"
                         className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
                       />
@@ -1169,9 +1214,15 @@ export default function Home() {
                       <input
                         type="password"
                         value={gmailAppPassword}
-                        onChange={(event) => setGmailAppPassword(event.target.value)}
+                        onChange={(event) => updateGmailAppPassword(event.target.value)}
                         placeholder="16-character app password"
-                        className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
+                        className={`w-full rounded-xl border bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none ${
+                          emailVerified
+                            ? "border-emerald-500/60"
+                            : verifyError
+                              ? "border-red-500/60"
+                              : "border-navy-600 focus:border-amber-500/60"
+                        }`}
                       />
                     </label>
 
@@ -1182,25 +1233,53 @@ export default function Home() {
                       <input
                         type="text"
                         value={emailTo}
-                        onChange={(event) => setEmailTo(event.target.value)}
+                        onChange={(event) => updateEmailTo(event.target.value)}
                         placeholder="you@gmail.com, team@company.com"
                         className="w-full rounded-xl border border-navy-600 bg-navy-900/70 px-4 py-3 font-sans text-sm text-white placeholder:text-navy-500 focus:outline-none focus:border-amber-500/60"
                       />
                     </label>
                   </div>
 
-                  <p className="mt-4 font-sans text-xs text-navy-400">
-                    Need an app password?{" "}
-                    <a
-                      href="https://myaccount.google.com/apppasswords"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                  <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                    <p className="font-sans text-xs text-amber-200">
+                      This is <strong>not</strong> your Gmail password. An App Password is a 16-character
+                      code from your{" "}
+                      <a
+                        href="https://myaccount.google.com/apppasswords"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-amber-300 underline underline-offset-4 hover:text-amber-200"
+                      >
+                        Google Account settings
+                      </a>
+                      . Requires 2-Step Verification.
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleVerifyEmail}
+                      disabled={!emailFieldsReady || isVerifyingEmail || emailVerified}
+                      className={`rounded-xl px-5 py-2.5 font-sans text-sm font-semibold transition-colors ${
+                        emailVerified
+                          ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/40"
+                          : !emailFieldsReady || isVerifyingEmail
+                            ? "bg-navy-700 text-navy-400 cursor-not-allowed"
+                            : "bg-amber-500 text-navy-950 hover:bg-amber-400"
+                      }`}
                     >
-                      Generate one in Google Account settings
-                    </a>
-                    .
-                  </p>
+                      {isVerifyingEmail
+                        ? "Verifying..."
+                        : emailVerified
+                          ? "Verified"
+                          : "Verify Credentials"}
+                    </button>
+
+                    {verifyError && (
+                      <p className="font-sans text-xs text-red-400">{verifyError}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-navy-700 bg-navy-800/40 p-6">
@@ -1212,9 +1291,9 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleDeploy}
-                    disabled={isDeploying || !githubToken || !emailConfigValid || !profileJson}
+                    disabled={isDeploying || !githubToken || !emailVerified || !emailFieldsReady || !profileJson}
                     className={`rounded-xl px-5 py-3 font-sans text-sm font-semibold transition-colors ${
-                      isDeploying || !githubToken || !emailConfigValid || !profileJson
+                      isDeploying || !githubToken || !emailVerified || !emailFieldsReady || !profileJson
                         ? "bg-navy-700 text-navy-400 cursor-not-allowed"
                         : "bg-amber-500 text-navy-950 hover:bg-amber-400"
                     }`}

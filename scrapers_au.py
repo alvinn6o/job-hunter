@@ -153,6 +153,20 @@ def _parse_seek_jobs(html: str) -> list[dict]:
 _seek_browser = None
 
 
+def close_seek_browser():
+    """Gracefully close the Seek browser to avoid noisy atexit errors from nodriver."""
+    global _seek_browser
+    if _seek_browser is None:
+        return
+    try:
+        loop = getattr(_seek_thread_local, "loop", None)
+        if loop and not loop.is_closed():
+            loop.run_until_complete(_seek_browser.stop())
+    except Exception:
+        pass
+    _seek_browser = None
+
+
 async def _get_seek_page_async(url: str) -> str:
     """Fetch a Seek page using nodriver (undetected Chrome) to bypass Cloudflare."""
     try:

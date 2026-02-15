@@ -25,7 +25,7 @@ from pathlib import Path
 import pandas as pd
 from jobspy import scrape_jobs
 
-from scrapers_au import scrape_au_sites, scrape_gradconnection, scrape_prosple
+from scrapers_au import close_seek_browser, scrape_au_sites, scrape_gradconnection, scrape_prosple
 
 # Suppress noisy JobSpy/tls_client logs
 logging.getLogger("JobSpy").setLevel(logging.WARNING)
@@ -1115,4 +1115,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        close_seek_browser()
