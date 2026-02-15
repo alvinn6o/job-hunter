@@ -224,9 +224,7 @@ test.describe("Wizard: Skip AI → Configure Profile → Verify JSON", () => {
 
     // Should see automation setup content
     await expect(
-      page
-        .locator("text=Daily Automation Setup")
-        .or(page.locator("text=Fork the repository")),
+      page.locator("h1", { hasText: "Daily Automation Setup" }),
     ).toBeVisible();
   });
 });

@@ -31,9 +31,7 @@ from scrape import load_profile
 
 def write_profile(data: dict) -> Path:
     """Write a profile dict to a temp JSON file and return the path."""
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False, encoding="utf-8"
-    )
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
     json.dump(data, tmp, indent=2)
     tmp.close()
     return Path(tmp.name)
@@ -350,9 +348,7 @@ class TestLoadProfileSchemaValidation:
             load_profile("/nonexistent/path/profile.json")
 
     def test_invalid_json(self):
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        )
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
         tmp.write("not valid json {{{")
         tmp.close()
 
@@ -375,9 +371,7 @@ class TestWebToPythonCompatibility:
         json_str = json.dumps(full_profile, indent=2)
 
         # Write it like the web app would
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        )
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
         tmp.write(json_str)
         tmp.close()
 
