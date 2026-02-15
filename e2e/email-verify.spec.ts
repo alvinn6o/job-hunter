@@ -22,6 +22,11 @@ test.describe("Step 3: Email Verification", () => {
     // Go to Step 3
     await page.getByRole("button", { name: /set up daily automation/i }).click();
     await expect(page.locator("h1")).toContainText("Automation");
+
+    // Automated setup UI only renders when NEXT_PUBLIC_GITHUB_CLIENT_ID is set.
+    // On CI this env var is absent, so skip all tests in this suite.
+    const hasAutomatedUI = await page.getByRole("button", { name: "Connect GitHub" }).isVisible().catch(() => false);
+    test.skip(!hasAutomatedUI, "Automated setup UI not available (no GITHUB_CLIENT_ID)");
   });
 
   test("shows App Password warning callout", async ({ page }) => {
