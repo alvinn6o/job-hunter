@@ -1,0 +1,191 @@
+{
+  "skills": [
+    {
+      "name": "Python",
+      "tier": "core"
+    },
+    {
+      "name": "SQL",
+      "tier": "core"
+    },
+    {
+      "name": "scikit-learn",
+      "tier": "core"
+    },
+    {
+      "name": "FastAPI",
+      "tier": "strong"
+    },
+    {
+      "name": "Pandas",
+      "tier": "strong"
+    },
+    {
+      "name": "Microsoft Fabric",
+      "tier": "strong"
+    },
+    {
+      "name": "Next.js",
+      "tier": "strong"
+    },
+    {
+      "name": "Tailwind CSS",
+      "tier": "strong"
+    },
+    {
+      "name": "TypeScript",
+      "tier": "strong"
+    },
+    {
+      "name": "Redis",
+      "tier": "strong"
+    },
+    {
+      "name": "PostgreSQL",
+      "tier": "strong"
+    },
+    {
+      "name": "Kafka",
+      "tier": "strong"
+    },
+    {
+      "name": "Docker",
+      "tier": "strong"
+    },
+    {
+      "name": "MLflow",
+      "tier": "strong"
+    },
+    {
+      "name": "XGBoost",
+      "tier": "strong"
+    },
+    {
+      "name": "NumPy",
+      "tier": "strong"
+    },
+    {
+      "name": "TensorFlow",
+      "tier": "strong"
+    },
+    {
+      "name": "PyTorch",
+      "tier": "strong"
+    },
+    {
+      "name": "Git",
+      "tier": "strong"
+    },
+    {
+      "name": "JavaScript",
+      "tier": "strong"
+    },
+    {
+      "name": "HTML",
+      "tier": "peripheral"
+    },
+    {
+      "name": "CSS",
+      "tier": "peripheral"
+    },
+    {
+      "name": "C++",
+      "tier": "peripheral"
+    },
+    {
+      "name": "Tableau",
+      "tier": "peripheral"
+    },
+    {
+      "name": "Power BI",
+      "tier": "peripheral"
+    },
+    {
+      "name": "Grafana",
+      "tier": "peripheral"
+    },
+    {
+      "name": "Supabase",
+      "tier": "peripheral"
+    },
+    {
+      "name": "TextBlob",
+      "tier": "peripheral"
+    },
+    {
+      "name": "Jupyter Notebooks",
+      "tier": "peripheral"
+    }
+  ],
+  "titles": [
+    "Data Scientist Intern",
+    "Machine Learning Engineer Intern",
+    "Data Analyst",
+    "Software Engineer (Data Focus)"
+  ],
+  "keywords": [
+    "python",
+    "sql",
+    "scikit-learn",
+    "fastapi",
+    "pandas",
+    "microsoft fabric",
+    "next.js",
+    "tailwind css",
+    "typescript",
+    "redis",
+    "postgresql",
+    "kafka",
+    "docker",
+    "mlflow",
+    "xgboost",
+    "numpy",
+    "tensorflow",
+    "pytorch",
+    "git",
+    "javascript",
+    "html",
+    "css",
+    "c++",
+    "tableau",
+    "power bi",
+    "grafana",
+    "supabase",
+    "textblob",
+    "jupyter notebooks"
+  ],
+  "locations": [
+    "Pittsburgh",
+    "Remote",
+    "Long Beach",
+    "Irvine",
+    "Los Angeles"
+  ],
+  "roles": [
+    "Data Scientist Intern",
+    "Machine Learning Engineer Intern",
+    "Data Analyst",
+    "Software Engineer (Data Focus)"
+  ],
+  "weights": {
+    "companyTier": 1,
+    "location": 1,
+    "titleMatch": 1,
+    "skills": 1,
+    "sponsorship": 1,
+    "recency": 1,
+    "culture": 1,
+    "quality": 1
+  },
+  "minScore": 20,
+  "maxHours": 48,
+  "resultsPerSearch": 20,
+  "excludeSeniority": [
+    "lead",
+    "staff",
+    "director",
+    "executive",
+    "senior",
+    "mid"
+  ]
+}
